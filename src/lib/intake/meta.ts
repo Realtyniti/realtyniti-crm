@@ -47,24 +47,91 @@ export interface MetaLead {
   field_data: { name: string; values: string[] }[];
 }
 
-export async function fetchMetaLead(leadgenId: string, pageAccessToken: string): Promise<MetaLead> {
-  const url = `${GRAPH_API}/${encodeURIComponent(leadgenId)}?fields=id,created_time,ad_id,form_id,platform,field_data`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${pageAccessToken}` } });
-  if (!res.ok) throw new Error(`Meta Graph API ${res.status}: ${await res.text()}`);
-  return (await res.json()) as MetaLead;
+/** HMAC of the token with the app secret; Meta requires it when "Require app secret" is on. */
+export function appsecretProof(token: string, appSecret: string | null | undefined): string | null {
+  return appSecret ? createHmac("sha256", appSecret).update(token).digest("hex") : null;
+}
+
+/** One Graph API call, with appsecret_proof whenever the app secret is known. */
+export async function graph<T>(
+  path: string,
+  token: string,
+  appSecret: string | null | undefined,
+  init: { method?: "GET" | "POST"; params?: Record<string, string> } = {},
+): Promise<T> {
+  const params = new URLSearchParams(init.params);
+  params.set("access_token", token);
+  const proof = appsecretProof(token, appSecret);
+  if (proof) params.set("appsecret_proof", proof);
+  const url = path.startsWith("http") ? path : `${GRAPH_API}/${path.replace(/^\//, "")}`;
+  const res =
+    init.method === "POST"
+      ? await fetch(url, { method: "POST", body: params })
+      : await fetch(`${url}${url.includes("?") ? "&" : "?"}${params}`);
+  if (!res.ok) throw new Error(`Meta Graph API ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  return (await res.json()) as T;
+}
+
+const LEAD_FIELDS = "id,created_time,ad_id,form_id,platform,field_data";
+
+export async function fetchMetaLead(leadgenId: string, pageToken: string, appSecret?: string | null): Promise<MetaLead> {
+  return graph<MetaLead>(`${encodeURIComponent(leadgenId)}?fields=${LEAD_FIELDS}`, pageToken, appSecret);
+}
+
+/** The lead form's name ("Grand Estate"), so Chetan sees which ad the buyer answered. */
+export async function formName(formId: string | undefined, pageToken: string, appSecret?: string | null): Promise<string | null> {
+  if (!formId) return null;
+  try {
+    return (await graph<{ name?: string }>(`${encodeURIComponent(formId)}?fields=name`, pageToken, appSecret)).name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export interface MetaForm {
+  id: string;
+  name: string;
+  status?: string;
+}
+
+/** Every lead on every form of a Page, oldest pages of results first. Used to bring past leads onto cards. */
+export async function* pageLeads(pageId: string, pageToken: string, appSecret?: string | null): AsyncGenerator<{ form: MetaForm; lead: MetaLead }> {
+  let next: string | null = `${encodeURIComponent(pageId)}/leadgen_forms?fields=id,name,status&limit=100`;
+  const forms: MetaForm[] = [];
+  while (next) {
+    const page: { data: MetaForm[]; paging?: { next?: string } } = await graph(next, pageToken, appSecret);
+    forms.push(...page.data);
+    next = page.paging?.next ? stripAuth(page.paging.next) : null;
+  }
+  for (const form of forms) {
+    let url: string | null = `${encodeURIComponent(form.id)}/leads?fields=${LEAD_FIELDS}&limit=100`;
+    while (url) {
+      const page: { data: MetaLead[]; paging?: { next?: string } } = await graph(url, pageToken, appSecret);
+      for (const lead of page.data) yield { form, lead: { ...lead, form_id: lead.form_id ?? form.id } };
+      url = page.paging?.next ? stripAuth(page.paging.next) : null;
+    }
+  }
+}
+
+/** Paging links carry the token; graph() adds it back, so drop it to avoid sending it twice. */
+function stripAuth(link: string): string {
+  const u = new URL(link);
+  u.searchParams.delete("access_token");
+  u.searchParams.delete("appsecret_proof");
+  return u.toString();
 }
 
 /**
  * Lead retrieval wants a Page access token. A system-user token assigned to the
  * Page can mint one; if that fails the token is used as it is.
  */
-export async function pageAccessToken(pageId: string, token: string): Promise<string> {
-  const res = await fetch(`${GRAPH_API}/${encodeURIComponent(pageId)}?fields=access_token`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return token;
-  const body = (await res.json()) as { access_token?: string };
-  return body.access_token ?? token;
+export async function pageAccessToken(pageId: string, token: string, appSecret?: string | null): Promise<string> {
+  try {
+    const body = await graph<{ access_token?: string }>(`${encodeURIComponent(pageId)}?fields=access_token`, token, appSecret);
+    return body.access_token ?? token;
+  } catch {
+    return token;
+  }
 }
 
 export interface LeadgenSetup {
@@ -82,25 +149,27 @@ export interface LeadgenSetup {
  */
 export async function connectLeadgen(s: LeadgenSetup): Promise<{ step: string; ok: boolean; detail: string }[]> {
   const out: { step: string; ok: boolean; detail: string }[] = [];
-  const post = async (step: string, url: string, params: Record<string, string>) => {
-    const res = await fetch(url, { method: "POST", body: new URLSearchParams(params) });
-    const detail = (await res.text()).slice(0, 300);
-    out.push({ step, ok: res.ok, detail });
-    return res.ok;
+  const run = async (step: string, call: () => Promise<unknown>) => {
+    try {
+      out.push({ step, ok: true, detail: JSON.stringify(await call()).slice(0, 300) });
+      return true;
+    } catch (e) {
+      out.push({ step, ok: false, detail: (e as Error).message });
+      return false;
+    }
   };
-  const appOk = await post("app webhook (leadgen)", `${GRAPH_API}/${s.appId}/subscriptions`, {
-    object: "page",
-    callback_url: s.callbackUrl,
-    fields: "leadgen",
-    verify_token: s.verifyToken,
-    access_token: `${s.appId}|${s.appSecret}`,
-  });
+  const appToken = `${s.appId}|${s.appSecret}`;
+  const appOk = await run("app webhook (leadgen)", () =>
+    graph(`${s.appId}/subscriptions`, appToken, null, {
+      method: "POST",
+      params: { object: "page", callback_url: s.callbackUrl, fields: "leadgen", verify_token: s.verifyToken },
+    }),
+  );
   if (!appOk) return out;
-  const pageToken = await pageAccessToken(s.pageId, s.token);
-  await post("Page subscribed to app", `${GRAPH_API}/${s.pageId}/subscribed_apps`, {
-    subscribed_fields: "leadgen",
-    access_token: pageToken,
-  });
+  const pageToken = await pageAccessToken(s.pageId, s.token, s.appSecret);
+  await run("Page subscribed to app", () =>
+    graph(`${s.pageId}/subscribed_apps`, pageToken, s.appSecret, { method: "POST", params: { subscribed_fields: "leadgen" } }),
+  );
   return out;
 }
 

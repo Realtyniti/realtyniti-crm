@@ -54,3 +54,11 @@ describe("Meta intake", () => {
     expect(metaPageFor(undefined, {})).toEqual({ brand: null, token: null });
   });
 });
+
+describe("appsecret_proof", () => {
+  it("is the HMAC-SHA256 of the token keyed by the app secret", async () => {
+    const { appsecretProof } = await import("@/lib/intake/meta");
+    expect(appsecretProof("tok", "sec")).toBe(createHmac("sha256", "sec").update("tok").digest("hex"));
+    expect(appsecretProof("tok", null)).toBeNull();
+  });
+});

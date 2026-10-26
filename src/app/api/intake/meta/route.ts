@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { greetNewLead } from "@/lib/catcher";
 import { catcherConfig } from "@/lib/catcher-config";
 import { captureLead } from "@/lib/leads";
-import { fetchMetaLead, leadgenChanges, metaLeadToInput, metaPageFor, pageAccessToken, verifyMetaSignature } from "@/lib/intake/meta";
+import { fetchMetaLead, formName, leadgenChanges, metaLeadToInput, metaPageFor, pageAccessToken, verifyMetaSignature } from "@/lib/intake/meta";
 import { getStore } from "@/lib/store";
 
 /** Meta's one-time webhook verification handshake. */
@@ -31,10 +31,15 @@ export async function POST(req: Request) {
     try {
       const page = metaPageFor(change.page_id, process.env);
       if (!page.token) throw new Error(`No Page access token for Page ${change.page_id ?? "(unknown)"}`);
-      const token = change.page_id ? await pageAccessToken(change.page_id, page.token) : page.token;
-      const lead = await fetchMetaLead(change.leadgen_id, token);
+      // META_PAGE_ACCESS_TOKEN is a system-user token; it mints the Page token lead retrieval needs.
+      const token = change.page_id ? await pageAccessToken(change.page_id, page.token, appSecret) : page.token;
+      const lead = await fetchMetaLead(change.leadgen_id, token, appSecret);
       const result = await captureLead(store, metaLeadToInput(lead, page.brand));
-      if (result.created) await greetNewLead(store, catcherConfig(), result.lead);
+      if (result.created) {
+        const form = await formName(lead.form_id ?? change.form_id, token, appSecret);
+        if (form) await store.addEvent({ lead_id: result.lead.id, kind: "note", channel: "meta", body: `Lead form: ${form}` });
+        await greetNewLead(store, catcherConfig(), result.lead);
+      }
       results.push({ leadgen_id: change.leadgen_id, ok: true });
     } catch (e) {
       console.error("meta intake failed", change.leadgen_id, e);
