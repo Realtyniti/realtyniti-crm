@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       <h2 className="pt-2 text-lg font-semibold">How we use it</h2>
       <p>
         Only to reply to your enquiry, suggest properties that fit, arrange site visits and follow up with you. We do not sell your
-        details or share them with anyone else, except a developer's sales office when you ask us to book a visit or a unit with them.
+        details or share them with anyone else, except a developer&rsquo;s sales office when you ask us to book a visit or a unit with them.
       </p>
 
       <h2 className="pt-2 text-lg font-semibold">Where it is kept</h2>
