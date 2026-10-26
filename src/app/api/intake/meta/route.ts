@@ -1,0 +1,44 @@
+import { NextResponse } from "next/server";
+import { captureLead } from "@/lib/leads";
+import { fetchMetaLead, leadgenChanges, metaLeadToInput, verifyMetaSignature } from "@/lib/intake/meta";
+import { getStore } from "@/lib/store";
+
+/** Meta's one-time webhook verification handshake. */
+export function GET(req: Request) {
+  const p = new URL(req.url).searchParams;
+  const token = process.env.META_VERIFY_TOKEN;
+  if (token && p.get("hub.mode") === "subscribe" && p.get("hub.verify_token") === token) {
+    return new Response(p.get("hub.challenge") ?? "", { status: 200 });
+  }
+  return new Response("forbidden", { status: 403 });
+}
+
+/** New Meta lead form submissions (Facebook and Instagram lead ads). */
+export async function POST(req: Request) {
+  const appSecret = process.env.META_APP_SECRET;
+  const pageToken = process.env.META_PAGE_ACCESS_TOKEN;
+  if (!appSecret || !pageToken) {
+    return NextResponse.json({ error: "META_APP_SECRET / META_PAGE_ACCESS_TOKEN not set" }, { status: 503 });
+  }
+
+  const raw = await req.text();
+  if (!verifyMetaSignature(raw, req.headers.get("x-hub-signature-256"), appSecret)) {
+    return NextResponse.json({ error: "bad signature" }, { status: 401 });
+  }
+
+  const store = getStore();
+  const results: { leadgen_id: string; ok: boolean; error?: string }[] = [];
+  for (const change of leadgenChanges(JSON.parse(raw))) {
+    try {
+      const lead = await fetchMetaLead(change.leadgen_id, pageToken);
+      await captureLead(store, metaLeadToInput(lead));
+      results.push({ leadgen_id: change.leadgen_id, ok: true });
+    } catch (e) {
+      console.error("meta intake failed", change.leadgen_id, e);
+      results.push({ leadgen_id: change.leadgen_id, ok: false, error: (e as Error).message });
+    }
+  }
+  // A non-2xx makes Meta retry; retries are safe because each lead id is stored once.
+  const failed = results.some((r) => !r.ok);
+  return NextResponse.json({ results }, { status: failed ? 500 : 200 });
+}
