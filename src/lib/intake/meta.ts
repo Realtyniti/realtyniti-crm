@@ -202,24 +202,31 @@ export function metaPageFor(pageId: string | undefined, env: Record<string, stri
   };
 }
 
+const YES_VISIT = /^(yes|haan|sure|ok)/i;
+
 export function metaLeadToInput(lead: MetaLead, brand: string | null = null): LeadInput {
-  const fields = new Map(lead.field_data.map((f) => [f.name.toLowerCase(), f.values.join(", ")]));
-  const budget = parseBudget(pick(fields, /budget/));
+  // Meta sends multiple-choice answers as slugs: "3–6_months", "2bhk_–_₹50_lakh".
+  const fields = new Map(lead.field_data.map((f) => [f.name.toLowerCase(), f.values.join(", ").replace(/_/g, " ").trim()]));
+  const homeAnswer = pick(fields, /which_home|looking_for|config|bhk|property_type|^type$/);
+  // A budget question if the form has one, else a price band inside the home choice ("3BHK (₹65L+)").
+  const budget = parseBudget(pick(fields, /budget/)) ?? (homeAnswer && /₹|lakh|lac|\bl\b|cr/i.test(homeAnswer) ? parseBudget(homeAnswer) : null);
+  const visit = pick(fields, /site_visit|visit/);
   const first = pick(fields, /^first_name$/);
   const last = pick(fields, /^last_name$/);
   return {
     // Meta reports "ig" for Instagram lead ads; both are paid Meta leads.
     source: "meta",
     brand,
-    phone: pick(fields, /^phone_number$/, /phone|mobile|whatsapp/) ?? "",
+    phone: pick(fields, /^phone_number$/, /phone|mobile|whatsapp/)?.replace(/\s/g, "") ?? "",
     name: pick(fields, /^full_name$/) ?? ([first, last].filter(Boolean).join(" ") || null),
     email: pick(fields, /^email$/),
     budget_min_inr: budget?.min ?? null,
     budget_max_inr: budget?.max ?? null,
     micro_market: parseMicroMarket(pick(fields, /location|area|city|sector|market/)),
-    property_type: parsePropertyType(pick(fields, /property|bhk|config|type/)),
+    property_type: parsePropertyType(homeAnswer),
     purpose: parsePurpose(pick(fields, /purpose|use|invest/)),
-    timeline_months: parseTimelineMonths(pick(fields, /timeline|when|time|plan/)),
+    timeline_months: parseTimelineMonths(pick(fields, /timeline|when_|plan_to_buy|planning/)),
+    agreed_site_visit: visit ? YES_VISIT.test(visit) : undefined,
     external_id: lead.id,
     received_at: lead.created_time ? new Date(lead.created_time).toISOString() : undefined,
     raw: lead,

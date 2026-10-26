@@ -62,3 +62,34 @@ describe("appsecret_proof", () => {
     expect(appsecretProof("tok", null)).toBeNull();
   });
 });
+
+describe("Grand Estate form answers", () => {
+  const lead = (fields: Record<string, string>) => ({
+    id: "1",
+    field_data: Object.entries({ full_name: "Asha Rao", phone_number: "+919812345678", ...fields }).map(([name, v]) => ({ name, values: [v] })),
+  });
+
+  it("reads Meta's slug answers", () => {
+    const i = metaLeadToInput(
+      lead({
+        "which_home_are_you_looking_for?": "3bhk_(₹65l+)",
+        "when_do_you_plan_to_buy?": "within_3_months",
+        "would_you_like_a_site_visit?": "yes,_this_week",
+      }),
+      "Tathya Homes",
+    );
+    expect(i).toMatchObject({ property_type: "3BHK", timeline_months: 3, agreed_site_visit: true, budget_min_inr: 6_500_000, brand: "Tathya Homes" });
+  });
+
+  it("prefers the budget question and reads day-based timelines", () => {
+    const i = metaLeadToInput(
+      lead({
+        "what_is_your_property_budget?": "₹45–55_lakh",
+        "which_configuration_are_you_interested_in?": "both",
+        "when_are_you_planning_to_buy?": "within_30_days",
+        "would_you_like_to_schedule_a_site_visit?": "need_more_details_first",
+      }),
+    );
+    expect(i).toMatchObject({ budget_min_inr: 4_500_000, budget_max_inr: 5_500_000, property_type: null, timeline_months: 1, agreed_site_visit: false });
+  });
+});

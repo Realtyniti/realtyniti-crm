@@ -44,9 +44,10 @@ export function parseTimelineMonths(text: string | null | undefined): number | n
   if (!text) return null;
   const t = text.toLowerCase();
   if (/\b(immediate|immediately|asap|urgent|this month|turant|abhi)\b/.test(t)) return 1;
-  const m = /(\d+(?:\.\d+)?)\s*(month|months|mahine|mahina|week|weeks|year|years|yr|yrs|saal)\b/.exec(t);
+  const m = /(\d+(?:\.\d+)?)\s*(month|months|mahine|mahina|week|weeks|year|years|yr|yrs|saal|day|days|din)\b/.exec(t);
   if (m) {
     const n = parseFloat(m[1]);
+    if (/^(day|days|din)$/.test(m[2])) return Math.max(1, Math.round(n / 30));
     if (m[2].startsWith("week")) return Math.max(1, Math.round(n / 4));
     if (/^(year|years|yr|yrs|saal)$/.test(m[2])) return Math.round(n * 12);
     return Math.round(n);
@@ -89,5 +90,6 @@ export function parsePropertyType(text: string | null | undefined): string | nul
   if (/\bstudio\b/i.test(text)) return "Studio";
   if (/\b(commercial|shop|office|retail)\b/i.test(text)) return "Commercial";
   if (/\bvilla\b/i.test(text)) return "Villa";
+  if (/^(both|any|either|other|not sure)$/i.test(text.trim())) return null;
   return text.trim();
 }
