@@ -61,7 +61,7 @@ export async function runFollowUpClock(store: Store, cfg: CatcherConfig, now = n
     if (windowOpen(lead.last_inbound_at, now)) {
       sent = await sendApproved(store, cfg, lead, `followup.${lead.temperature ?? "warm"}`);
     } else if (cfg.followupTemplate) {
-      await cfg.sender.sendTemplate(lead.phone, { ...cfg.followupTemplate, params: [lead.name?.split(" ")[0] ?? "there"] });
+      await cfg.sender.sendTemplate(lead.phone, { ...cfg.followupTemplate, params: [lead.name?.split(" ")[0] ?? "there", lead.brand] });
       await store.addEvent({
         lead_id: lead.id,
         kind: "message_out",

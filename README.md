@@ -85,7 +85,10 @@ npm test
 3. Website form: POST JSON to `/api/intake/website` with header `x-intake-key: $INTAKE_SECRET`.
    Fields: `name, phone, email, budget, location, property_type, purpose, timeline, message, submission_id`.
 4. Meta lead ads: in the Meta app, subscribe the Page to the `leadgen` webhook at `/api/intake/meta`
-   with `META_VERIFY_TOKEN`; give a Page access token with `leads_retrieval`.
+   with `META_VERIFY_TOKEN`; give a Page access token with `leads_retrieval`. Ads run on more than one
+   Page (Tathya Homes, Realtyniti): `META_PAGE_BRANDS` maps each Page id to its name, and every lead is
+   greeted in the name it enquired with (`{{brand}}` in templates; `{{2}}` in the opener and follow-up
+   Meta templates).
 5. WhatsApp Cloud API: point the app's WhatsApp webhook at `/api/whatsapp` (field `messages`) with
    `WHATSAPP_VERIFY_TOKEN`; set the phone number id, a permanent system-user token, and register the
    opener and alert templates in WhatsApp Manager.

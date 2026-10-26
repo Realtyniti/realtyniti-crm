@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { leadgenChanges, metaLeadToInput, verifyMetaSignature } from "@/lib/intake/meta";
+import { leadgenChanges, metaLeadToInput, metaPageFor, verifyMetaSignature } from "@/lib/intake/meta";
 
 describe("Meta intake", () => {
   it("verifies the webhook signature", () => {
@@ -40,5 +40,17 @@ describe("Meta intake", () => {
       timeline_months: 3,
       external_id: "lg_1",
     });
+  });
+
+  it("picks the brand and token for each Facebook Page", () => {
+    const env = {
+      META_PAGE_BRANDS: "111=Tathya Homes, 222=Realtyniti",
+      META_PAGE_ACCESS_TOKEN: "default-token",
+      META_PAGE_ACCESS_TOKEN_222: "realtyniti-token",
+    };
+    expect(metaPageFor("111", env)).toEqual({ brand: "Tathya Homes", token: "default-token" });
+    expect(metaPageFor("222", env)).toEqual({ brand: "Realtyniti", token: "realtyniti-token" });
+    expect(metaPageFor("999", env)).toEqual({ brand: null, token: "default-token" });
+    expect(metaPageFor(undefined, {})).toEqual({ brand: null, token: null });
   });
 });

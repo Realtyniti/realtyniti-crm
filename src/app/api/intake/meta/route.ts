@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { greetNewLead } from "@/lib/catcher";
 import { catcherConfig } from "@/lib/catcher-config";
 import { captureLead } from "@/lib/leads";
-import { fetchMetaLead, leadgenChanges, metaLeadToInput, verifyMetaSignature } from "@/lib/intake/meta";
+import { fetchMetaLead, leadgenChanges, metaLeadToInput, metaPageFor, verifyMetaSignature } from "@/lib/intake/meta";
 import { getStore } from "@/lib/store";
 
 /** Meta's one-time webhook verification handshake. */
@@ -18,10 +18,7 @@ export function GET(req: Request) {
 /** New Meta lead form submissions (Facebook and Instagram lead ads). */
 export async function POST(req: Request) {
   const appSecret = process.env.META_APP_SECRET;
-  const pageToken = process.env.META_PAGE_ACCESS_TOKEN;
-  if (!appSecret || !pageToken) {
-    return NextResponse.json({ error: "META_APP_SECRET / META_PAGE_ACCESS_TOKEN not set" }, { status: 503 });
-  }
+  if (!appSecret) return NextResponse.json({ error: "META_APP_SECRET not set" }, { status: 503 });
 
   const raw = await req.text();
   if (!verifyMetaSignature(raw, req.headers.get("x-hub-signature-256"), appSecret)) {
@@ -32,8 +29,10 @@ export async function POST(req: Request) {
   const results: { leadgen_id: string; ok: boolean; error?: string }[] = [];
   for (const change of leadgenChanges(JSON.parse(raw))) {
     try {
-      const lead = await fetchMetaLead(change.leadgen_id, pageToken);
-      const result = await captureLead(store, metaLeadToInput(lead));
+      const page = metaPageFor(change.page_id, process.env);
+      if (!page.token) throw new Error(`No Page access token for Page ${change.page_id ?? "(unknown)"}`);
+      const lead = await fetchMetaLead(change.leadgen_id, page.token);
+      const result = await captureLead(store, metaLeadToInput(lead, page.brand));
       if (result.created) await greetNewLead(store, catcherConfig(), result.lead);
       results.push({ leadgen_id: change.leadgen_id, ok: true });
     } catch (e) {

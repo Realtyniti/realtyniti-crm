@@ -2,7 +2,7 @@ import { classify, nextFollowUpDate, unansweredQuestions, QUALIFYING_QUESTIONS }
 import { normalisePhone } from "./phone";
 import { checkMoney } from "./price-guard";
 import type { LeadPatch, Store } from "./store/types";
-import { DEFAULT_TEMPLATES, templateProblems } from "./templates";
+import { DEFAULT_BRAND, DEFAULT_TEMPLATES, templateProblems } from "./templates";
 import type { Lead, LeadInput, Requirement } from "./types";
 
 export class LeadError extends Error {}
@@ -86,6 +86,7 @@ export async function captureLead(store: Store, input: LeadInput, now = new Date
       asked_questions: [],
       last_inbound_at: null,
       prefers_hinglish: false,
+      brand: input.brand?.trim() || DEFAULT_BRAND,
       followups_unanswered: 0,
       last_followup_at: null,
     });

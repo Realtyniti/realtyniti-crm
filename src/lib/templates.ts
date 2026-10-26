@@ -12,31 +12,31 @@ export const DEFAULT_TEMPLATES: Omit<MessageTemplate, "approved_at" | "updated_a
     key: "first_reply.meta",
     channel: "meta",
     purpose: "First reply to a Meta lead form",
-    body: "Hi {{name}}, this is Chetan from Realtyniti. Thanks for your enquiry on Facebook/Instagram. I help buyers and investors across Noida, Greater Noida and the Yamuna Expressway. Can I ask a few quick questions so I share only what fits you?",
+    body: "Hi {{name}}, this is Chetan from {{brand}}. Thanks for your enquiry on Facebook/Instagram. I help buyers and investors across Noida, Greater Noida and the Yamuna Expressway. Can I ask a few quick questions so I share only what fits you?",
   },
   {
     key: "first_reply.youtube",
     channel: "youtube",
     purpose: "First reply to a YouTube comment asking for details",
-    body: "Hi {{name}}, Chetan from Realtyniti here. Thanks for watching and asking on YouTube. Happy to help you shortlist the right project. A few quick questions first?",
+    body: "Hi {{name}}, Chetan from {{brand}} here. Thanks for watching and asking on YouTube. Happy to help you shortlist the right project. A few quick questions first?",
   },
   {
     key: "first_reply.whatsapp",
     channel: "whatsapp",
     purpose: "First reply to a new WhatsApp message from an unknown number",
-    body: "Hi {{name}}, thanks for reaching out to Realtyniti. I'm Chetan. To suggest the right projects in Noida, Greater Noida or the Yamuna Expressway, can I ask you a few quick questions?",
+    body: "Hi {{name}}, thanks for reaching out to {{brand}}. I'm Chetan. To suggest the right projects in Noida, Greater Noida or the Yamuna Expressway, can I ask you a few quick questions?",
   },
   {
     key: "first_reply.website",
     channel: "website",
     purpose: "First reply to a website form",
-    body: "Hi {{name}}, Chetan from Realtyniti here. I got your enquiry from our website. A few quick questions so I can shortlist the right projects for you?",
+    body: "Hi {{name}}, Chetan from {{brand}} here. I got your enquiry from our website. A few quick questions so I can shortlist the right projects for you?",
   },
   {
     key: "first_reply.referral",
     channel: "referral",
     purpose: "First reply to a referral",
-    body: "Hi {{name}}, Chetan from Realtyniti here. {{referrer}} mentioned you're looking at property. Glad to help. Can I ask a few quick questions?",
+    body: "Hi {{name}}, Chetan from {{brand}} here. {{referrer}} mentioned you're looking at property. Glad to help. Can I ask a few quick questions?",
   },
   {
     key: "money_question.hold",
@@ -119,7 +119,7 @@ export const DEFAULT_TEMPLATES: Omit<MessageTemplate, "approved_at" | "updated_a
     key: "followup.cold",
     channel: null,
     purpose: "Follow-up for a cold lead",
-    body: "Hi {{name}}, a quick hello from Realtyniti. If you're still exploring {{micro_market}}, I'm here whenever you want an update.",
+    body: "Hi {{name}}, a quick hello from {{brand}}. If you're still exploring {{micro_market}}, I'm here whenever you want an update.",
   },
   {
     key: "catcher.cold_nurture",
@@ -129,8 +129,12 @@ export const DEFAULT_TEMPLATES: Omit<MessageTemplate, "approved_at" | "updated_a
   },
 ];
 
+/** The brand a lead enquired with when nothing else is known. */
+export const DEFAULT_BRAND = "Realtyniti";
+
 const FALLBACKS: Record<string, string> = {
   name: "there",
+  brand: DEFAULT_BRAND,
   micro_market: "your preferred area",
   referrer: "A friend",
 };

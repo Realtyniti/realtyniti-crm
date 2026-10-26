@@ -56,6 +56,9 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
             <SourceBadge key={s} value={s} />
           ))}
         </div>
+        <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-700" title="The name this buyer enquired with">
+          {lead.brand}
+        </span>
       </div>
 
       {lead.needs_chetan && (

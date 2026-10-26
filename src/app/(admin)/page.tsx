@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SourceBadge, STATUS_LABEL, TemperatureBadge } from "@/components/badges";
 import { endOfTodayIst, formatBudget, formatDate, formatDateTime } from "@/lib/format";
 import { getStore } from "@/lib/store";
+import { DEFAULT_BRAND } from "@/lib/templates";
 import type { Lead } from "@/lib/types";
 
 const FILTERS = [
@@ -105,6 +106,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   </td>
                   <td className="px-3 py-2">
                     <SourceBadge value={l.first_source} />
+                    {l.brand !== DEFAULT_BRAND && <div className="mt-1 text-xs text-stone-500">{l.brand}</div>}
                   </td>
                   <td className="px-3 py-2">
                     {STATUS_LABEL[l.status]}

@@ -45,6 +45,8 @@ export interface Lead extends Requirement {
   asked_questions: string[];
   last_inbound_at: string | null;
   prefers_hinglish: boolean;
+  /** The business name the buyer enquired with (Realtyniti, Tathya Homes); messages greet them in it. */
+  brand: string;
   /** Follow-up Clock: messages sent since the buyer last replied. */
   followups_unanswered: number;
   last_followup_at: string | null;
@@ -85,6 +87,8 @@ export interface LeadInput extends Partial<Requirement> {
   name?: string | null;
   email?: string | null;
   source: LeadSource;
+  /** Which of Chetan's brands the enquiry came in under, when the channel knows. */
+  brand?: string | null;
   external_id?: string | null;
   message?: string | null;
   raw?: unknown;

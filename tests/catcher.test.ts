@@ -116,11 +116,29 @@ describe("greeting form leads", () => {
     cfg.openerTemplate = { name: "realtyniti_opener", language: "en" };
     const { lead } = await captureLead(store, { source: "meta", phone: BUYER, name: "Ravi Kumar" });
     await greetNewLead(store, cfg, lead);
-    expect(sender.sent[0].template).toEqual({ name: "realtyniti_opener", language: "en", params: ["Ravi"] });
+    expect(sender.sent[0].template).toEqual({ name: "realtyniti_opener", language: "en", params: ["Ravi", "Realtyniti"] });
 
     // When they reply, the questions start.
     await handleInbound(store, cfg, msg("Yes please"));
     expect(toBuyer().at(-1)).toMatch(/budget/i);
+  });
+
+  it("greets a Tathya Homes ad lead as Tathya Homes, keeping the brand on later visits", async () => {
+    cfg.openerTemplate = { name: "brand_opener", language: "en" };
+    const { lead } = await captureLead(store, { source: "meta", brand: "Tathya Homes", phone: BUYER, name: "Ravi Kumar" });
+    await greetNewLead(store, cfg, lead);
+    expect(sender.sent[0].template?.params).toEqual(["Ravi", "Tathya Homes"]);
+
+    // Same buyer later messages the WhatsApp number directly: still a Tathya Homes lead.
+    const again = await captureLead(store, { source: "whatsapp", phone: BUYER });
+    expect(again.lead.brand).toBe("Tathya Homes");
+  });
+
+  it("names the brand in free-text first replies", async () => {
+    await captureLead(store, { source: "meta", brand: "Tathya Homes", phone: BUYER, name: "Ravi Kumar" });
+    await handleInbound(store, cfg, msg("Hi"));
+    expect(toBuyer()[0]).toMatch(/Chetan from Tathya Homes/);
+    expect(toBuyer()[0]).not.toMatch(/Realtyniti/);
   });
 
   it("flags the card when no opener template is set up", async () => {

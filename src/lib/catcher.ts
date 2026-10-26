@@ -3,7 +3,7 @@ import { captureLead, updateRequirement } from "./leads";
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "./parse";
 import { checkMoney } from "./price-guard";
 import type { Store } from "./store/types";
-import { firstReplyKey, renderForSending, TemplateError } from "./templates";
+import { DEFAULT_BRAND, firstReplyKey, renderForSending, TemplateError } from "./templates";
 import { formatBudget } from "./format";
 import type { Lead, Requirement } from "./types";
 import { windowOpen, type InboundMessage, type WhatsAppSender } from "./whatsapp";
@@ -18,11 +18,11 @@ export interface CatcherConfig {
   sender: WhatsAppSender;
   /** Chetan's own WhatsApp number, for hot-lead and price-question alerts. */
   chetanPhone: string | null;
-  /** Meta-registered template for first contact outside the 24h window; {{1}} = buyer name. */
+  /** Meta-registered template for first contact outside the 24h window; {{1}} = buyer name, {{2}} = brand. */
   openerTemplate: { name: string; language: string } | null;
   /** Meta-registered template for alerts to Chetan; {{1}} = the alert line. */
   alertTemplate: { name: string; language: string } | null;
-  /** Meta-registered follow-up template for outside the 24h window; {{1}} = buyer first name. */
+  /** Meta-registered follow-up template for outside the 24h window; {{1}} = buyer first name, {{2}} = brand. */
   followupTemplate?: { name: string; language: string } | null;
   /** Site Visit Booker link for a lead, when bookings are set up. */
   bookingUrl?: (leadId: string) => string | null;
@@ -77,7 +77,7 @@ export async function sendApproved(
   let text: string;
   try {
     if (!t) throw new TemplateError(`Template "${key}" does not exist.`);
-    text = renderForSending(t, { name: lead.name?.split(" ")[0], micro_market: lead.micro_market, ...vars });
+    text = renderForSending(t, { name: lead.name?.split(" ")[0], micro_market: lead.micro_market, brand: lead.brand, ...vars });
   } catch (e) {
     if (!(e instanceof TemplateError)) throw e;
     await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `Not sent: ${e.message}` });
@@ -157,7 +157,7 @@ async function advance(store: Store, cfg: CatcherConfig, lead: Lead): Promise<Le
     const link = cfg.bookingUrl?.(lead.id);
     if (link) await sendApproved(store, cfg, lead, "catcher.hot_booking", { booking_link: link });
     else await sendApproved(store, cfg, lead, "catcher.hot_handoff");
-    await alertChetan(store, cfg, lead, `🔥 Hot lead: ${lead.name ?? "Unnamed"} ${lead.phone} · ${requirementLine(lead)} · via ${lead.first_source}`);
+    await alertChetan(store, cfg, lead, `🔥 Hot lead: ${lead.name ?? "Unnamed"} ${lead.phone} · ${requirementLine(lead)} · via ${lead.first_source}${lead.brand !== DEFAULT_BRAND ? ` (${lead.brand})` : ""}`);
   } else if (temperature === "warm") {
     await sendApproved(store, cfg, lead, "warm.project_overview");
   } else {
@@ -189,7 +189,7 @@ export async function greetNewLead(store: Store, cfg: CatcherConfig, lead: Lead,
     });
     return;
   }
-  await cfg.sender.sendTemplate(lead.phone, { ...cfg.openerTemplate, params: [lead.name?.split(" ")[0] ?? "there"] });
+  await cfg.sender.sendTemplate(lead.phone, { ...cfg.openerTemplate, params: [lead.name?.split(" ")[0] ?? "there", lead.brand] });
   await store.addEvent({
     lead_id: lead.id,
     kind: "message_out",
@@ -199,7 +199,7 @@ export async function greetNewLead(store: Store, cfg: CatcherConfig, lead: Lead,
   await store.updateLead(lead.id, { first_reply_at: now.toISOString() });
 }
 
-/** A buyer wrote to the Realtyniti WhatsApp number. */
+/** A buyer wrote to Chetan's business WhatsApp number. */
 export async function handleInbound(store: Store, cfg: CatcherConfig, msg: InboundMessage, now = new Date()): Promise<Lead> {
   const flaggedBefore = (await store.findLeadByPhone(msg.from))?.needs_chetan ?? false;
   const r = await captureLead(

@@ -60,7 +60,30 @@ function pick(fields: Map<string, string>, ...patterns: RegExp[]): string | null
   return null;
 }
 
-export function metaLeadToInput(lead: MetaLead): LeadInput {
+/**
+ * Chetan runs ads from more than one Facebook Page (Tathya Homes, Realtyniti),
+ * each with its own Page access token. META_PAGE_BRANDS maps Page ids to the
+ * brand name buyers saw: "111=Tathya Homes,222=Realtyniti".
+ */
+export interface MetaPage {
+  brand: string | null;
+  token: string | null;
+}
+
+export function metaPageFor(pageId: string | undefined, env: Record<string, string | undefined>): MetaPage {
+  const brands = new Map(
+    (env.META_PAGE_BRANDS ?? "")
+      .split(",")
+      .map((pair) => pair.split("=").map((s) => s.trim()))
+      .filter(([id, name]) => id && name) as [string, string][],
+  );
+  return {
+    brand: (pageId && brands.get(pageId)) || null,
+    token: (pageId && env[`META_PAGE_ACCESS_TOKEN_${pageId}`]) || env.META_PAGE_ACCESS_TOKEN || null,
+  };
+}
+
+export function metaLeadToInput(lead: MetaLead, brand: string | null = null): LeadInput {
   const fields = new Map(lead.field_data.map((f) => [f.name.toLowerCase(), f.values.join(", ")]));
   const budget = parseBudget(pick(fields, /budget/));
   const first = pick(fields, /^first_name$/);
@@ -68,6 +91,7 @@ export function metaLeadToInput(lead: MetaLead): LeadInput {
   return {
     // Meta reports "ig" for Instagram lead ads; both are paid Meta leads.
     source: "meta",
+    brand,
     phone: pick(fields, /^phone_number$/, /phone|mobile|whatsapp/) ?? "",
     name: pick(fields, /^full_name$/) ?? ([first, last].filter(Boolean).join(" ") || null),
     email: pick(fields, /^email$/),
