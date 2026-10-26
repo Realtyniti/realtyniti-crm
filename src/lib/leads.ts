@@ -86,6 +86,8 @@ export async function captureLead(store: Store, input: LeadInput, now = new Date
       asked_questions: [],
       last_inbound_at: null,
       prefers_hinglish: false,
+      followups_unanswered: 0,
+      last_followup_at: null,
     });
     created = true;
   } else {
@@ -190,7 +192,7 @@ export async function closeLead(
 
 /** Chetan has dealt with the money question; automation may resume. */
 export async function clearChetanFlag(store: Store, id: string): Promise<Lead> {
-  const updated = await store.updateLead(id, { needs_chetan: false, needs_chetan_reason: null });
+  const updated = await store.updateLead(id, { needs_chetan: false, needs_chetan_reason: null, followups_unanswered: 0 });
   await store.addEvent({ lead_id: id, kind: "note", channel: null, body: "Chetan cleared the flag." });
   return updated;
 }

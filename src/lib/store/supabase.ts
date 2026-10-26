@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Lead, LeadEvent, LeadTouch, MessageTemplate, SiteVisit, VisitSlot } from "../types";
+import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
 import type { LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
 
 /** Server-only store backed by Supabase, using the service role key. */
@@ -104,6 +104,32 @@ export class SupabaseStore implements Store {
 
   async updateVisit(id: string, patch: Partial<Omit<SiteVisit, "id" | "created_at">>) {
     return must<SiteVisit>(await this.db.from("site_visits").update(patch).eq("id", id).select().single());
+  }
+
+  async listProjects() {
+    return many<Project>(await this.db.from("projects").select("*").order("name"));
+  }
+
+  async getProject(id: string) {
+    return one<Project>(await this.db.from("projects").select("*").eq("id", id).maybeSingle());
+  }
+
+  async insertProject(p: ProjectInput) {
+    return must<Project>(await this.db.from("projects").insert(p).select().single());
+  }
+
+  async updateProject(id: string, patch: Partial<ProjectInput>) {
+    return must<Project>(await this.db.from("projects").update(patch).eq("id", id).select().single());
+  }
+
+  async listSpend() {
+    return many<ChannelSpend>(await this.db.from("channel_spend").select("source, month, amount_inr").order("month", { ascending: false }));
+  }
+
+  async upsertSpend(s: ChannelSpend) {
+    return must<ChannelSpend>(
+      await this.db.from("channel_spend").upsert({ ...s, updated_at: new Date().toISOString() }).select("source, month, amount_inr").single(),
+    );
   }
 }
 

@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { captureLead, clearChetanFlag, closeLead, LeadError, saveTemplate, updateRequirement } from "@/lib/leads";
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "@/lib/parse";
+import { markFollowedUp } from "@/lib/followup-clock";
 import { importLeads } from "@/lib/import";
+import { projectFromForm } from "@/lib/projects";
 import { getStore } from "@/lib/store";
 import { setVisitStatus } from "@/lib/visits";
 import { LEAD_SOURCES, type LeadSource } from "@/lib/types";
@@ -162,4 +164,40 @@ export async function importLeadsAction(_: ActionState, fd: FormData): Promise<A
     ok: `Imported: ${parts.join(", ")}.`,
     error: result.errors.length ? `Skipped ${result.errors.length}: ${result.errors.slice(0, 5).join("; ")}` : undefined,
   };
+}
+
+export async function saveProjectAction(id: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
+  const input = projectFromForm(fd);
+  if ("error" in input) return { error: input.error };
+  const store = getStore();
+  const confirmedToday = fd.get("confirmed_today") === "on";
+  const existing = id ? await store.getProject(id) : null;
+  const confirmation = confirmedToday
+    ? { last_confirmed_at: new Date().toISOString(), confirmed_by: str(fd, "confirmed_by") ?? input.developer_contact_name ?? "Chetan" }
+    : { last_confirmed_at: existing?.last_confirmed_at ?? null, confirmed_by: existing?.confirmed_by ?? null };
+  const saved = existing
+    ? await store.updateProject(existing.id, { ...input, ...confirmation })
+    : await store.insertProject({ ...input, ...confirmation });
+  revalidatePath("/projects");
+  if (!existing) redirect(`/projects/${saved.id}`);
+  revalidatePath(`/projects/${saved.id}`);
+  return { ok: confirmedToday ? "Saved and marked confirmed today." : "Saved." };
+}
+
+export async function markFollowedUpAction(leadId: string, fd: FormData) {
+  await markFollowedUp(getStore(), leadId, str(fd, "note"));
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/board");
+}
+
+export async function saveSpendAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const source = str(fd, "source") as LeadSource | null;
+  const month = str(fd, "month");
+  const amount = Number((str(fd, "amount") ?? "").replace(/[,₹\s]/g, ""));
+  if (!source || !LEAD_SOURCES.includes(source) || !month || !Number.isFinite(amount) || amount < 0) {
+    return { error: "Pick a channel and month, and enter the amount in rupees." };
+  }
+  await getStore().upsertSpend({ source, month: `${month}-01`, amount_inr: Math.round(amount) });
+  revalidatePath("/channels");
+  return { ok: "Saved." };
 }

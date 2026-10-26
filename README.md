@@ -9,8 +9,8 @@ Every Realtyniti lead on one card, built from the Realtyniti AI Systems Blueprin
 | 1 | **Foundation:** Lead Card database, Intake SOP rules, approved templates with price guard, website and Meta lead-form intake, leads screen | F-00, SYS-01 | **Built** |
 | 2 | **Lead Catcher on WhatsApp:** first reply within minutes, five questions one at a time, hot/warm/cold tag, hot-lead alert and morning digest | SYS-02 | **Built** (needs WhatsApp keys to go live) |
 | 3 | **Pipeline Board + Site Visit Booker**, import of existing leads | SYS-03, SYS-04 | **Built** |
-| 4 | **Follow-up Clock, Project Sheet SOP, Channel Board** | SYS-05, SYS-06, SYS-07 | Next |
-| 5 | **Months 4–12:** Project Book, Match Finder, Freshness Check, then Niti, Lead Keeper, Project Keeper | | |
+| 4 | **Follow-up Clock, Project Sheet SOP, Channel Board** | SYS-05, SYS-06, SYS-07 | **Built** |
+| 5 | **Months 4–12:** Project Book, Match Finder, Freshness Check, then Niti, Lead Keeper, Project Keeper | | Next |
 
 ## Guardrails built in
 
@@ -45,9 +45,21 @@ Replace them with his own wording; everything else reads from that file.
 - `/book/<token>`: the buyer's personal, signed link. Only open slots at least 2 hours ahead; pickup from
   Noida Sector 18 or Pari Chowk; re-booking moves the visit and frees the old slot. Hot leads get the link automatically.
 - Confirmation on WhatsApp, alert to Chetan, reminders the evening before (after 6 PM IST) and 2 hours before
-  (hourly Supabase pg_cron call to `/api/cron/reminders`).
+  (hourly Supabase pg_cron call to `/api/cron/hourly`).
 - `/import`: paste existing leads from Excel or Google Sheets; duplicates merge by phone, lost rows need a reason,
   and nobody is messaged.
+
+## Follow-up Clock, Project Sheet, Channel Board (Phase 4)
+
+- Follow-up Clock (hourly, 10 AM–7 PM IST): on a lead's follow-up date sends the approved `followup.<tag>` message,
+  sets the next date from the intake cadence, and stops with a flag for Chetan after two unanswered follow-ups or
+  whenever money comes up. Outside WhatsApp's 24h window it uses `WHATSAPP_FOLLOWUP_TEMPLATE`, or leaves the lead on
+  Chetan's due list. "I followed up" on the lead card resets it.
+- `/projects`: the fixed Project Sheet fields per developer project, green/amber/red freshness (14/30 days in
+  `src/lib/projects.ts`), offers ending soon, a client summary with the confirmation date beside every figure, a
+  developer re-confirmation WhatsApp draft, and a 2–3 project comparison note. All drafts; nothing is sent.
+- `/channels`: enquiries, qualified, hot, visits and median first-reply time per channel for the week or month;
+  enter monthly spend to see rupees per qualified lead and per site visit.
 
 ## Run locally
 

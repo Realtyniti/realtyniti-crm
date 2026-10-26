@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DEFAULT_TEMPLATES } from "../templates";
-import type { Lead, LeadEvent, LeadTouch, MessageTemplate, SiteVisit, VisitSlot } from "../types";
+import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
 import type { LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
 
 /** In-process store. Data is lost on restart; used for local demo and tests. */
@@ -11,6 +11,8 @@ export class MemoryStore implements Store {
   private templates = new Map<string, MessageTemplate>();
   private slots = new Map<string, VisitSlot>();
   private visits = new Map<string, SiteVisit>();
+  private projects = new Map<string, Project>();
+  private spend = new Map<string, ChannelSpend>();
 
   constructor() {
     const now = new Date().toISOString();
@@ -148,6 +150,38 @@ export class MemoryStore implements Store {
     const row = { ...cur, ...patch };
     this.visits.set(id, row);
     return row;
+  }
+
+  async listProjects() {
+    return [...this.projects.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getProject(id: string) {
+    return this.projects.get(id) ?? null;
+  }
+
+  async insertProject(p: ProjectInput) {
+    const now = new Date().toISOString();
+    const row: Project = { ...p, id: randomUUID(), created_at: now, updated_at: now };
+    this.projects.set(row.id, row);
+    return row;
+  }
+
+  async updateProject(id: string, patch: Partial<ProjectInput>) {
+    const cur = this.projects.get(id);
+    if (!cur) throw new Error(`project ${id} not found`);
+    const row = { ...cur, ...patch, updated_at: new Date().toISOString() };
+    this.projects.set(id, row);
+    return row;
+  }
+
+  async listSpend() {
+    return [...this.spend.values()].sort((a, b) => b.month.localeCompare(a.month));
+  }
+
+  async upsertSpend(s: ChannelSpend) {
+    this.spend.set(`${s.source}|${s.month}`, s);
+    return s;
   }
 }
 

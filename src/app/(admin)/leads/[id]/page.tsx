@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { addNoteAction, clearFlagAction } from "@/app/actions";
+import { addNoteAction, clearFlagAction, markFollowedUpAction } from "@/app/actions";
 import { SourceBadge, STATUS_LABEL, TemperatureBadge } from "@/components/badges";
 import { CopyButton } from "@/components/copy-button";
 import { bookingUrlFor } from "@/lib/catcher-config";
@@ -115,6 +115,15 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
                     : "No first reply sent yet."}
                   {lead.awaiting_question && ` Waiting for their answer on ${lead.awaiting_question.replace("_", " ")}.`}
                 </p>
+                <form action={markFollowedUpAction.bind(null, lead.id)} className="flex gap-2">
+                  <input name="note" className="input" placeholder="What happened? (optional)" />
+                  <button className="btn-ghost whitespace-nowrap">I followed up</button>
+                </form>
+                {lead.followups_unanswered > 0 && (
+                  <p className="text-stone-600">
+                    {lead.followups_unanswered} automatic follow-up{lead.followups_unanswered === 1 ? "" : "s"} without a reply.
+                  </p>
+                )}
                 {ask ? (
                   <p>
                     Ask next: <em>{ask.ask}</em>

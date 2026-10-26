@@ -45,6 +45,9 @@ export interface Lead extends Requirement {
   asked_questions: string[];
   last_inbound_at: string | null;
   prefers_hinglish: boolean;
+  /** Follow-up Clock: messages sent since the buyer last replied. */
+  followups_unanswered: number;
+  last_followup_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -113,4 +116,41 @@ export interface SiteVisit {
   reminder_evening_sent_at: string | null;
   reminder_2h_sent_at: string | null;
   created_at: string;
+}
+
+export type Availability = "available" | "limited" | "sold_out" | "on_hold";
+
+export interface Project {
+  id: string;
+  name: string;
+  developer: string;
+  micro_market: string;
+  sector: string | null;
+  rera_number: string | null;
+  configurations: string | null;
+  price_min_inr: number | null;
+  price_max_inr: number | null;
+  plc: string | null;
+  payment_plan: string | null;
+  possession: string | null;
+  offers: string | null;
+  offer_valid_until: string | null;
+  amenities: string | null;
+  availability: Availability;
+  developer_contact_name: string | null;
+  developer_contact_phone: string | null;
+  last_confirmed_at: string | null;
+  confirmed_by: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectInput = Omit<Project, "id" | "created_at" | "updated_at">;
+
+export interface ChannelSpend {
+  source: LeadSource;
+  /** First day of the month, YYYY-MM-01. */
+  month: string;
+  amount_inr: number;
 }

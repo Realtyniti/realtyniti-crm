@@ -1,4 +1,4 @@
-import type { Lead, LeadEvent, LeadTouch, MessageTemplate, SiteVisit, VisitSlot } from "../types";
+import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
 
 export type NewLead = Omit<Lead, "id" | "created_at" | "updated_at">;
 export type LeadPatch = Partial<Omit<Lead, "id" | "created_at" | "updated_at">>;
@@ -36,6 +36,14 @@ export interface Store {
   listVisits(filter?: VisitFilter): Promise<SiteVisit[]>;
   insertVisit(visit: Omit<SiteVisit, "id" | "created_at" | "reminder_evening_sent_at" | "reminder_2h_sent_at">): Promise<SiteVisit>;
   updateVisit(id: string, patch: Partial<Omit<SiteVisit, "id" | "created_at">>): Promise<SiteVisit>;
+
+  listProjects(): Promise<Project[]>;
+  getProject(id: string): Promise<Project | null>;
+  insertProject(p: ProjectInput): Promise<Project>;
+  updateProject(id: string, patch: Partial<ProjectInput>): Promise<Project>;
+
+  listSpend(): Promise<ChannelSpend[]>;
+  upsertSpend(s: ChannelSpend): Promise<ChannelSpend>;
 }
 
 export interface VisitFilter {

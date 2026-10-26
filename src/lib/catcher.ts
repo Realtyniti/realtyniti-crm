@@ -22,6 +22,8 @@ export interface CatcherConfig {
   openerTemplate: { name: string; language: string } | null;
   /** Meta-registered template for alerts to Chetan; {{1}} = the alert line. */
   alertTemplate: { name: string; language: string } | null;
+  /** Meta-registered follow-up template for outside the 24h window; {{1}} = buyer first name. */
+  followupTemplate?: { name: string; language: string } | null;
   /** Site Visit Booker link for a lead, when bookings are set up. */
   bookingUrl?: (leadId: string) => string | null;
 }
@@ -209,6 +211,7 @@ export async function handleInbound(store: Store, cfg: CatcherConfig, msg: Inbou
 
   let lead = await store.updateLead(r.lead.id, {
     last_inbound_at: msg.timestamp,
+    followups_unanswered: 0,
     prefers_hinglish: r.lead.prefers_hinglish || looksHinglish(msg.text),
   });
 

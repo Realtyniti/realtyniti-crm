@@ -14,11 +14,13 @@ export function catcherConfig(): CatcherConfig {
   const language = process.env.WHATSAPP_TEMPLATE_LANG || "en";
   const opener = process.env.WHATSAPP_OPENER_TEMPLATE;
   const alert = process.env.WHATSAPP_ALERT_TEMPLATE;
+  const followup = process.env.WHATSAPP_FOLLOWUP_TEMPLATE;
   return {
     sender,
     chetanPhone: normalisePhone(process.env.CHETAN_WHATSAPP),
     openerTemplate: opener ? { name: opener, language } : null,
     alertTemplate: alert ? { name: alert, language } : null,
+    followupTemplate: followup ? { name: followup, language } : null,
     bookingUrl: bookingUrlFor,
   };
 }

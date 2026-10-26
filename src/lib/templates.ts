@@ -102,6 +102,25 @@ export const DEFAULT_TEMPLATES: Omit<MessageTemplate, "approved_at" | "updated_a
     purpose: "Site visit reminder, two hours before",
     body: "Hi {{name}}, see you in about two hours for the site visit at {{when}}, {{area}}. {{map_url}}",
   },
+  // Follow-up Clock (SYS-05): one gentle nudge per tag, never a figure.
+  {
+    key: "followup.hot",
+    channel: null,
+    purpose: "Follow-up for a hot lead",
+    body: "Hi {{name}}, just checking in. Shall we fix a time for you to see the projects we discussed?",
+  },
+  {
+    key: "followup.warm",
+    channel: null,
+    purpose: "Follow-up for a warm lead",
+    body: "Hi {{name}}, any new thoughts on your search in {{micro_market}}? Happy to share options or set up a visit whenever you're ready.",
+  },
+  {
+    key: "followup.cold",
+    channel: null,
+    purpose: "Follow-up for a cold lead",
+    body: "Hi {{name}}, a quick hello from Realtyniti. If you're still exploring {{micro_market}}, I'm here whenever you want an update.",
+  },
   {
     key: "catcher.cold_nurture",
     channel: null,
