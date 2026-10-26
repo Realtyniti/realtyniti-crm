@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { greetNewLead } from "@/lib/catcher";
 import { catcherConfig } from "@/lib/catcher-config";
 import { captureLead } from "@/lib/leads";
-import { fetchMetaLead, leadgenChanges, metaLeadToInput, metaPageFor, verifyMetaSignature } from "@/lib/intake/meta";
+import { fetchMetaLead, leadgenChanges, metaLeadToInput, metaPageFor, pageAccessToken, verifyMetaSignature } from "@/lib/intake/meta";
 import { getStore } from "@/lib/store";
 
 /** Meta's one-time webhook verification handshake. */
@@ -31,7 +31,8 @@ export async function POST(req: Request) {
     try {
       const page = metaPageFor(change.page_id, process.env);
       if (!page.token) throw new Error(`No Page access token for Page ${change.page_id ?? "(unknown)"}`);
-      const lead = await fetchMetaLead(change.leadgen_id, page.token);
+      const token = change.page_id ? await pageAccessToken(change.page_id, page.token) : page.token;
+      const lead = await fetchMetaLead(change.leadgen_id, token);
       const result = await captureLead(store, metaLeadToInput(lead, page.brand));
       if (result.created) await greetNewLead(store, catcherConfig(), result.lead);
       results.push({ leadgen_id: change.leadgen_id, ok: true });

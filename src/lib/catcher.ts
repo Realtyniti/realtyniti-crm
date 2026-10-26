@@ -1,5 +1,5 @@
 import { classify, QUALIFYING_QUESTIONS, type QuestionKey } from "./intake-sop";
-import { captureLead, updateRequirement } from "./leads";
+import { captureLead, closeLead, updateRequirement } from "./leads";
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "./parse";
 import { checkMoney } from "./price-guard";
 import type { Store } from "./store/types";
@@ -38,6 +38,7 @@ export function looksHinglish(text: string): boolean {
 }
 
 const YES = /\b(yes|yeah|yep|yup|haan|han|ha|sure|ok|okay|definitely|zaroor|jarur|ji)\b/i;
+const STOP = /^\s*(stop|unsubscribe|band karo|mat bhejo)\s*[.!]*\s*$/i;
 const NO = /\b(no|nope|nahi|nahin|not now|later|baad mein)\b/i;
 
 /** Reads the buyer's reply to the question we asked into card fields. */
@@ -208,6 +209,12 @@ export async function handleInbound(store: Store, cfg: CatcherConfig, msg: Inbou
     now,
   );
   if (r.duplicateDelivery) return r.lead;
+
+  // "STOP" opts the buyer out: no reply, no follow-ups, and Chetan can see why on the card.
+  if (STOP.test(msg.text)) {
+    await store.updateLead(r.lead.id, { last_inbound_at: msg.timestamp, awaiting_question: null });
+    return closeLead(store, r.lead.id, "lost", "Asked to stop messages");
+  }
 
   let lead = await store.updateLead(r.lead.id, {
     last_inbound_at: msg.timestamp,

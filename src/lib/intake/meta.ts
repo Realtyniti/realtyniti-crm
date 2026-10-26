@@ -54,6 +54,56 @@ export async function fetchMetaLead(leadgenId: string, pageAccessToken: string):
   return (await res.json()) as MetaLead;
 }
 
+/**
+ * Lead retrieval wants a Page access token. A system-user token assigned to the
+ * Page can mint one; if that fails the token is used as it is.
+ */
+export async function pageAccessToken(pageId: string, token: string): Promise<string> {
+  const res = await fetch(`${GRAPH_API}/${encodeURIComponent(pageId)}?fields=access_token`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return token;
+  const body = (await res.json()) as { access_token?: string };
+  return body.access_token ?? token;
+}
+
+export interface LeadgenSetup {
+  appId: string;
+  appSecret: string;
+  pageId: string;
+  token: string;
+  callbackUrl: string;
+  verifyToken: string;
+}
+
+/**
+ * One-time wiring: subscribe the app to Page leadgen webhooks, then subscribe the
+ * Page to the app. Safe to run again; Meta treats both calls as updates.
+ */
+export async function connectLeadgen(s: LeadgenSetup): Promise<{ step: string; ok: boolean; detail: string }[]> {
+  const out: { step: string; ok: boolean; detail: string }[] = [];
+  const post = async (step: string, url: string, params: Record<string, string>) => {
+    const res = await fetch(url, { method: "POST", body: new URLSearchParams(params) });
+    const detail = (await res.text()).slice(0, 300);
+    out.push({ step, ok: res.ok, detail });
+    return res.ok;
+  };
+  const appOk = await post("app webhook (leadgen)", `${GRAPH_API}/${s.appId}/subscriptions`, {
+    object: "page",
+    callback_url: s.callbackUrl,
+    fields: "leadgen",
+    verify_token: s.verifyToken,
+    access_token: `${s.appId}|${s.appSecret}`,
+  });
+  if (!appOk) return out;
+  const pageToken = await pageAccessToken(s.pageId, s.token);
+  await post("Page subscribed to app", `${GRAPH_API}/${s.pageId}/subscribed_apps`, {
+    subscribed_fields: "leadgen",
+    access_token: pageToken,
+  });
+  return out;
+}
+
 /** Custom form questions are matched loosely by their field name. */
 function pick(fields: Map<string, string>, ...patterns: RegExp[]): string | null {
   for (const p of patterns) for (const [k, v] of fields) if (p.test(k)) return v;

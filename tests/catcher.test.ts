@@ -111,6 +111,17 @@ describe("Lead Catcher conversation", () => {
   });
 });
 
+describe("opting out", () => {
+  it("STOP closes the lead without a reply", async () => {
+    await handleInbound(store, cfg, msg("Hi"));
+    const before = sender.sent.length;
+    const lead = await handleInbound(store, cfg, msg("STOP"));
+    expect(sender.sent).toHaveLength(before);
+    expect(lead.status).toBe("lost");
+    expect(lead.lost_reason).toBe("Asked to stop messages");
+  });
+});
+
 describe("greeting form leads", () => {
   it("uses the Meta opener template outside the 24h window", async () => {
     cfg.openerTemplate = { name: "realtyniti_opener", language: "en" };
