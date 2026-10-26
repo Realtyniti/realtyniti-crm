@@ -115,6 +115,9 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
                     : "No first reply sent yet."}
                   {lead.awaiting_question && ` Waiting for their answer on ${lead.awaiting_question.replace("_", " ")}.`}
                 </p>
+                <Link href={`/match?lead=${lead.id}`} className="btn-ghost text-xs">
+                  Find matching projects
+                </Link>
                 <form action={markFollowedUpAction.bind(null, lead.id)} className="flex gap-2">
                   <input name="note" className="input" placeholder="What happened? (optional)" />
                   <button className="btn-ghost whitespace-nowrap">I followed up</button>

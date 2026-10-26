@@ -6,10 +6,10 @@ import { captureLead, clearChetanFlag, closeLead, LeadError, saveTemplate, updat
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "@/lib/parse";
 import { markFollowedUp } from "@/lib/followup-clock";
 import { importLeads } from "@/lib/import";
-import { projectFromForm } from "@/lib/projects";
+import { acceptedPatch, FIGURE_LABEL, figureChanges, figuresFromForm, projectFromForm, type FigureChange, type FigureKey } from "@/lib/projects";
 import { getStore } from "@/lib/store";
 import { setVisitStatus } from "@/lib/visits";
-import { LEAD_SOURCES, type LeadSource } from "@/lib/types";
+import { LEAD_SOURCES, type LeadSource, type ProjectInput } from "@/lib/types";
 
 export interface ActionState {
   error?: string;
@@ -200,4 +200,30 @@ export async function saveSpendAction(_: ActionState, fd: FormData): Promise<Act
   await getStore().upsertSpend({ source, month: `${month}-01`, amount_inr: Math.round(amount) });
   revalidatePath("/channels");
   return { ok: "Saved." };
+}
+
+export interface FigureState {
+  error?: string;
+  ok?: string;
+  changes?: FigureChange[];
+  /** The reply as submitted, carried to the accept step. */
+  reply?: Partial<ProjectInput>;
+}
+
+/** Step 1 of the Freshness Check: show the developer's figures beside the current ones. */
+export async function compareFiguresAction(id: string, _: FigureState, fd: FormData): Promise<FigureState> {
+  const project = await getStore().getProject(id);
+  if (!project) return { error: "Project not found." };
+  const reply = figuresFromForm(fd, project);
+  const changes = figureChanges(project, reply);
+  return { changes, reply };
+}
+
+/** Step 2: write only the ticked changes and mark the project confirmed now. */
+export async function acceptFiguresAction(id: string, reply: Partial<ProjectInput>, _: FigureState, fd: FormData): Promise<FigureState> {
+  const accepted = fd.getAll("accept").filter((v): v is FigureKey => typeof v === "string" && v in FIGURE_LABEL);
+  await getStore().updateProject(id, acceptedPatch(reply, accepted, str(fd, "confirmed_by")));
+  revalidatePath(`/projects/${id}`);
+  revalidatePath("/projects");
+  return { ok: accepted.length ? `Accepted ${accepted.length} change${accepted.length === 1 ? "" : "s"}; marked confirmed today.` : "No changes; marked confirmed today." };
 }

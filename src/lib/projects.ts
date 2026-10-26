@@ -70,7 +70,7 @@ export function developerConfirmation(p: Project): string {
   ask.push(`Availability${have(AVAILABILITY_LABEL[p.availability])}`);
   ask.push(`Possession timeline${have(p.possession)}`);
   return [
-    `Hi ${p.developer_contact_name?.split(" ")[0] ?? ""}, Chetan from Realtyniti here.`.replace(" ,", ","),
+    p.developer_contact_name ? `Hi ${p.developer_contact_name.split(" ")[0]}, Chetan from Realtyniti here.` : "Hello, this is Chetan from Realtyniti.",
     `Could you please confirm the latest for ${p.name}:`,
     ...ask.map((a, i) => `${i + 1}. ${a}`),
     "Thank you!",
@@ -136,9 +136,69 @@ export function projectFromForm(fd: FormData): ProjectInput | { error: string } 
   };
 }
 
-/** Fields whose change means the figures need re-confirming. */
-export const PRICED_FIELDS = ["price_min_inr", "price_max_inr", "payment_plan", "offers", "offer_valid_until", "availability", "possession", "plc"] as const;
+/*
+ * Freshness Check: when the developer replies, old and new figures are shown
+ * side by side and Chetan accepts each change before it enters the Project Book.
+ */
 
-export function pricedFieldsChanged(before: Project, after: ProjectInput): string[] {
-  return PRICED_FIELDS.filter((k) => (before[k] ?? null) !== (after[k] ?? null));
+export type FigureKey = "price" | "payment_plan" | "offers" | "offer_valid_until" | "availability" | "possession" | "plc";
+
+export const FIGURE_LABEL: Record<FigureKey, string> = {
+  price: "Price range",
+  payment_plan: "Payment plan",
+  offers: "Offers",
+  offer_valid_until: "Offer valid until",
+  availability: "Availability",
+  possession: "Possession",
+  plc: "PLC",
+};
+
+export interface FigureChange {
+  key: FigureKey;
+  label: string;
+  before: string;
+  after: string;
+}
+
+function figureText(p: Pick<Project, "price_min_inr" | "price_max_inr" | "payment_plan" | "offers" | "offer_valid_until" | "availability" | "possession" | "plc">, k: FigureKey): string {
+  if (k === "price") return formatBudget(p.price_min_inr, p.price_max_inr) ?? "";
+  if (k === "availability") return AVAILABILITY_LABEL[p.availability];
+  return p[k] ?? "";
+}
+
+/** Reads the developer's reply (same fields as the sheet) and lists what changed. */
+export function figuresFromForm(fd: FormData, current: Project): Partial<ProjectInput> {
+  const price = parseBudget(text(fd, "price"));
+  const availability = text(fd, "availability") as Availability | null;
+  return {
+    price_min_inr: price ? price.min : current.price_min_inr,
+    price_max_inr: price ? price.max : current.price_max_inr,
+    payment_plan: text(fd, "payment_plan"),
+    offers: text(fd, "offers"),
+    offer_valid_until: text(fd, "offer_valid_until"),
+    availability: availability && AVAILABILITY.includes(availability) ? availability : current.availability,
+    possession: text(fd, "possession"),
+    plc: text(fd, "plc"),
+  };
+}
+
+export function figureChanges(current: Project, reply: Partial<ProjectInput>): FigureChange[] {
+  const next = { ...current, ...reply };
+  return (Object.keys(FIGURE_LABEL) as FigureKey[])
+    .map((key) => ({ key, label: FIGURE_LABEL[key], before: figureText(current, key), after: figureText(next, key) }))
+    .filter((c) => c.before !== c.after);
+}
+
+/** Only the changes Chetan ticked are written; the project is then confirmed as of now. */
+export function acceptedPatch(reply: Partial<ProjectInput>, accepted: FigureKey[], confirmedBy: string | null, now = new Date()): Partial<ProjectInput> {
+  const patch: Partial<ProjectInput> = { last_confirmed_at: now.toISOString(), confirmed_by: confirmedBy };
+  for (const k of accepted) {
+    if (k === "price") {
+      patch.price_min_inr = reply.price_min_inr ?? null;
+      patch.price_max_inr = reply.price_max_inr ?? null;
+    } else {
+      Object.assign(patch, { [k]: reply[k] ?? null });
+    }
+  }
+  return patch;
 }

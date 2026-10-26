@@ -1,13 +1,14 @@
 import { requirementLine } from "./catcher";
-import { endOfTodayIst } from "./format";
-import type { Lead } from "./types";
+import { endOfTodayIst, formatDate } from "./format";
+import { freshness, offersExpiring } from "./projects";
+import type { Lead, Project } from "./types";
 
 /**
  * Chetan's 9 AM message: what came in overnight (warm and cold; hot ones were
  * alerted at once), who asked about money, and today's follow-ups. One line per
  * lead so it also fits a single WhatsApp template parameter.
  */
-export function buildDigest(leads: Lead[], now = new Date()): string | null {
+export function buildDigest(leads: Lead[], now = new Date(), projects: Project[] = []): string | null {
   const since = new Date(now.getTime() - 24 * 3600_000).toISOString();
   const dueBy = endOfTodayIst(now).toISOString();
   const open = leads.filter((l) => l.status !== "converted" && l.status !== "lost");
@@ -18,7 +19,9 @@ export function buildDigest(leads: Lead[], now = new Date()): string | null {
     .filter((l) => l.next_follow_up_at && l.next_follow_up_at <= dueBy)
     .sort((a, b) => (a.timeline_months ?? 99) - (b.timeline_months ?? 99));
 
-  if (!fresh.length && !money.length && !due.length) return null;
+  const stale = projects.filter((p) => p.availability !== "sold_out" && freshness(p, now) === "red");
+  const expiring = offersExpiring(projects, 3, now);
+  if (!fresh.length && !money.length && !due.length && !stale.length && !expiring.length) return null;
 
   const who = (l: Lead) => `${l.name ?? "Unnamed"} ${l.phone}${requirementLine(l) ? ` (${requirementLine(l)})` : ""}`;
   const count = (t: Lead["temperature"]) => fresh.filter((l) => l.temperature === t).length;
@@ -29,5 +32,7 @@ export function buildDigest(leads: Lead[], now = new Date()): string | null {
   if (due.length) parts.push(`Follow up today: ${due.slice(0, 8).map(who).join("; ")}${due.length > 8 ? ` and ${due.length - 8} more` : ""}.`);
   const warm = fresh.filter((l) => l.temperature === "warm");
   if (warm.length) parts.push(`New warm: ${warm.slice(0, 5).map(who).join("; ")}.`);
+  if (expiring.length) parts.push(`Offers ending: ${expiring.map((p) => `${p.name} (${formatDate(p.offer_valid_until)})`).join("; ")}.`);
+  if (stale.length) parts.push(`Projects to re-confirm: ${stale.slice(0, 6).map((p) => p.name).join(", ")}${stale.length > 6 ? ` and ${stale.length - 6} more` : ""}.`);
   return parts.join(" ");
 }

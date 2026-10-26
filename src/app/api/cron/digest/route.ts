@@ -12,7 +12,8 @@ export async function GET(req: Request) {
   const cfg = catcherConfig();
   if (!cfg.chetanPhone) return NextResponse.json({ error: "CHETAN_WHATSAPP not set" }, { status: 503 });
 
-  const digest = buildDigest(await getStore().listLeads());
+  const store = getStore();
+  const digest = buildDigest(await store.listLeads(), new Date(), await store.listProjects());
   if (!digest) return NextResponse.json({ sent: false, reason: "nothing to report" });
   if (cfg.alertTemplate) await cfg.sender.sendTemplate(cfg.chetanPhone, { ...cfg.alertTemplate, params: [digest] });
   else await cfg.sender.sendText(cfg.chetanPhone, digest);

@@ -10,7 +10,7 @@ Every Realtyniti lead on one card, built from the Realtyniti AI Systems Blueprin
 | 2 | **Lead Catcher on WhatsApp:** first reply within minutes, five questions one at a time, hot/warm/cold tag, hot-lead alert and morning digest | SYS-02 | **Built** (needs WhatsApp keys to go live) |
 | 3 | **Pipeline Board + Site Visit Booker**, import of existing leads | SYS-03, SYS-04 | **Built** |
 | 4 | **Follow-up Clock, Project Sheet SOP, Channel Board** | SYS-05, SYS-06, SYS-07 | **Built** |
-| 5 | **Months 4–12:** Project Book, Match Finder, Freshness Check, then Niti, Lead Keeper, Project Keeper | | Next |
+| 5 | **Months 4–12:** Project Book, Match Finder, Freshness Check, then Niti, Lead Keeper, Project Keeper | | Match Finder + Freshness Check **built**; AI assistants next |
 
 ## Guardrails built in
 
@@ -60,6 +60,15 @@ Replace them with his own wording; everything else reads from that file.
   developer re-confirmation WhatsApp draft, and a 2–3 project comparison note. All drafts; nothing is sent.
 - `/channels`: enquiries, qualified, hot, visits and median first-reply time per channel for the week or month;
   enter monthly spend to see rupees per qualified lead and per site visit.
+
+## Match Finder and Freshness Check (Phase 5, first part)
+
+- `/match` (or "Find matching projects" on a lead card): ranks Project Book entries by budget, location, property
+  type and ready-to-move for urgent buyers; near misses (slightly over budget, other location, missing type) listed
+  apart; sold-out projects excluded; stale figures say who to confirm with. Draft shortlist message for Chetan to check.
+- Freshness Check on each project: enter the developer's reply, see old and new figures side by side, accept each
+  change; only accepted figures are written and the project turns green.
+- The 9 AM digest now also lists offers ending within 3 days and projects to re-confirm.
 
 ## Run locally
 

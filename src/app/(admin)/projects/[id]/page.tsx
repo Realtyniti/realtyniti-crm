@@ -6,6 +6,7 @@ import { normalisePhone } from "@/lib/phone";
 import { clientSummary, developerConfirmation } from "@/lib/projects";
 import { getStore } from "@/lib/store";
 import { ProjectForm } from "../form";
+import { FreshnessCheck } from "./freshness-check";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -47,7 +48,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 </a>
               )}
             </div>
-            <p className="text-xs text-stone-500">When they reply, update the figures and tick “confirmed today”.</p>
+            <p className="text-xs text-stone-500">When they reply, enter their figures under “Developer replied?”.</p>
+          </section>
+          <section className="panel space-y-2 text-sm">
+            <h2 className="font-medium">Developer replied?</h2>
+            <p className="text-xs text-stone-500">Enter their figures. You&apos;ll see old and new side by side and accept each change.</p>
+            <FreshnessCheck p={p} />
           </section>
           <section className="panel space-y-2 text-sm">
             <h2 className="font-medium">Client summary (draft)</h2>
