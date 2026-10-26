@@ -100,6 +100,12 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
                 <p>
                   Follow up on <strong>{formatDate(lead.next_follow_up_at)}</strong>
                 </p>
+                <p className="text-stone-600">
+                  {lead.first_reply_at
+                    ? `First reply sent ${formatDateTime(lead.first_reply_at)}.`
+                    : "No first reply sent yet."}
+                  {lead.awaiting_question && ` Waiting for their answer on ${lead.awaiting_question.replace("_", " ")}.`}
+                </p>
                 {ask ? (
                   <p>
                     Ask next: <em>{ask.ask}</em>

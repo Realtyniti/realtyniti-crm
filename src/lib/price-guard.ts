@@ -5,9 +5,9 @@
  *  - incoming: a buyer asking about money flags the card for Chetan and stops automation.
  */
 
-const MONEY_PATTERNS: { label: string; re: RegExp }[] = [
-  { label: "rupee amount", re: /₹|\brs\.?\s*\d|\binr\b|\d\s*(lakh|lac|lakhs|cr|crore|crores|k)\b/i },
-  { label: "lakh/crore", re: /\b(lakh|lakhs|lac|crore|crores)\b/i },
+const MONEY_PATTERNS: { label: string; re: RegExp; amountOnly?: boolean }[] = [
+  { label: "rupee amount", amountOnly: true, re: /₹|\brs\.?\s*\d|\binr\b|\d\s*(lakh|lac|lakhs|cr|crore|crores|k)\b/i },
+  { label: "lakh/crore", amountOnly: true, re: /\b(lakh|lakhs|lac|crore|crores)\b/i },
   { label: "price", re: /\b(price|prices|pricing|cost|costs|rate|rates|per\s*sq\.?\s*ft|psf)\b/i },
   { label: "payment plan", re: /\b(payment\s*plan|emi|down\s*payment|booking\s*amount|token\s*amount|instal+ments?)\b/i },
   { label: "discount", re: /\b(discount|discounts|cashback|waiver|negotiat\w*)\b/i },
@@ -21,8 +21,13 @@ export interface MoneyCheck {
   matched: string[];
 }
 
-export function checkMoney(text: string | null | undefined): MoneyCheck {
+/**
+ * Outgoing (default): any rupee figure counts. Incoming: a buyer stating their
+ * own budget ("around 55 lakh") is an answer, not a price question, so bare
+ * amounts are ignored and only price, payment plan, discount and offer count.
+ */
+export function checkMoney(text: string | null | undefined, opts: { incoming?: boolean } = {}): MoneyCheck {
   if (!text) return { mentionsMoney: false, matched: [] };
-  const matched = MONEY_PATTERNS.filter((p) => p.re.test(text)).map((p) => p.label);
+  const matched = MONEY_PATTERNS.filter((p) => !(opts.incoming && p.amountOnly) && p.re.test(text)).map((p) => p.label);
   return { mentionsMoney: matched.length > 0, matched };
 }

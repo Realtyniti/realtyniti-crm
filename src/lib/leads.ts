@@ -60,7 +60,7 @@ export async function captureLead(store: Store, input: LeadInput, now = new Date
     }
   }
 
-  const money = checkMoney(input.message);
+  const money = checkMoney(input.message, { incoming: true });
   const existing = await store.findLeadByPhone(phone);
   let lead: Lead;
   let created = false;
@@ -82,6 +82,10 @@ export async function captureLead(store: Store, input: LeadInput, now = new Date
       next_follow_up_at: nextFollowUpDate(req, now).toISOString(),
       first_reply_at: null,
       notes: null,
+      awaiting_question: null,
+      asked_questions: [],
+      last_inbound_at: null,
+      prefers_hinglish: false,
     });
     created = true;
   } else {

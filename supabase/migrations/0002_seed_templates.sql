@@ -1,0 +1,9 @@
+insert into message_templates (key, channel, purpose, body) values
+  ('first_reply.meta', 'meta'::lead_source, 'First reply to a Meta lead form', 'Hi {{name}}, this is Chetan from Realtyniti. Thanks for your enquiry on Facebook/Instagram. I help buyers and investors across Noida, Greater Noida and the Yamuna Expressway. Can I ask a few quick questions so I share only what fits you?'),
+  ('first_reply.youtube', 'youtube'::lead_source, 'First reply to a YouTube comment asking for details', 'Hi {{name}}, Chetan from Realtyniti here. Thanks for watching and asking on YouTube. Happy to help you shortlist the right project. A few quick questions first?'),
+  ('first_reply.whatsapp', 'whatsapp'::lead_source, 'First reply to a new WhatsApp message from an unknown number', 'Hi {{name}}, thanks for reaching out to Realtyniti. I''m Chetan. To suggest the right projects in Noida, Greater Noida or the Yamuna Expressway, can I ask you a few quick questions?'),
+  ('first_reply.website', 'website'::lead_source, 'First reply to a website form', 'Hi {{name}}, Chetan from Realtyniti here. I got your enquiry from our website. A few quick questions so I can shortlist the right projects for you?'),
+  ('first_reply.referral', 'referral'::lead_source, 'First reply to a referral', 'Hi {{name}}, Chetan from Realtyniti here. {{referrer}} mentioned you''re looking at property. Glad to help. Can I ask a few quick questions?'),
+  ('money_question.hold', null, 'Reply when a buyer asks about price, payment plan or offers', 'Good question, {{name}}. Chetan will personally share the latest sheet and details with you shortly.'),
+  ('warm.project_overview', null, 'Pre-approved overview for warm leads (no figures)', 'Hi {{name}}, based on what you shared, here are a few projects in {{micro_market}} worth a look. Would you like to plan a site visit this weekend?')
+on conflict (key) do nothing;

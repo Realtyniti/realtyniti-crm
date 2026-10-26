@@ -7,8 +7,8 @@ Every Realtyniti lead on one card, built from the Realtyniti AI Systems Blueprin
 | Phase | What | Blueprint systems | Status |
 |---|---|---|---|
 | 1 | **Foundation:** Lead Card database, Intake SOP rules, approved templates with price guard, website and Meta lead-form intake, leads screen | F-00, SYS-01 | **Built** |
-| 2 | **Lead Catcher on WhatsApp:** first reply within minutes, five questions one at a time, hot/warm/cold tag, hot-lead alert and morning digest | SYS-02 | Next |
-| 3 | **Pipeline Board + Site Visit Booker**, import of existing leads | SYS-03, SYS-04 | |
+| 2 | **Lead Catcher on WhatsApp:** first reply within minutes, five questions one at a time, hot/warm/cold tag, hot-lead alert and morning digest | SYS-02 | **Built** (needs WhatsApp keys to go live) |
+| 3 | **Pipeline Board + Site Visit Booker**, import of existing leads | SYS-03, SYS-04 | Next |
 | 4 | **Follow-up Clock, Project Sheet SOP, Channel Board** | SYS-05, SYS-06, SYS-07 | |
 | 5 | **Months 4–12:** Project Book, Match Finder, Freshness Check, then Niti, Lead Keeper, Project Keeper | | |
 
@@ -24,6 +24,18 @@ Every Realtyniti lead on one card, built from the Realtyniti AI Systems Blueprin
 The rules in `src/lib/intake-sop.ts` are **placeholders** taken from the blueprint's examples:
 the five qualifying questions in his order, the hot/warm/cold rules, and the follow-up cadence.
 Replace them with his own wording; everything else reads from that file.
+
+## Lead Catcher (Phase 2)
+
+- A message to the Realtyniti WhatsApp number creates or updates the card, sends the approved first reply,
+  then asks the five questions one at a time (Hinglish if the buyer writes in Hinglish) and a site-visit question.
+- Hot: the buyer is told Chetan will call, and Chetan gets a WhatsApp alert with the requirement.
+  Warm: approved project overview (no figures). Cold: polite close, slow nurture list.
+- Price, EMI, discount or offer from the buyer: one approved holding reply, an alert to Chetan, then silence until he clears the flag.
+- Meta and website leads get a Meta-registered opener template (WhatsApp only allows templates for first contact);
+  the questions start when they reply.
+- 9 AM IST digest to Chetan via Vercel Cron (`vercel.json`).
+- Any template Chetan has not approved is held and noted on the card instead of being sent.
 
 ## Run locally
 
@@ -41,3 +53,6 @@ npm test
    Fields: `name, phone, email, budget, location, property_type, purpose, timeline, message, submission_id`.
 4. Meta lead ads: in the Meta app, subscribe the Page to the `leadgen` webhook at `/api/intake/meta`
    with `META_VERIFY_TOKEN`; give a Page access token with `leads_retrieval`.
+5. WhatsApp Cloud API: point the app's WhatsApp webhook at `/api/whatsapp` (field `messages`) with
+   `WHATSAPP_VERIFY_TOKEN`; set the phone number id, a permanent system-user token, and register the
+   opener and alert templates in WhatsApp Manager.

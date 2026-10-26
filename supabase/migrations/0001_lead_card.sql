@@ -1,8 +1,6 @@
 -- Phase 1 foundation: the Lead Card (F-00).
 -- Every other system reads from or writes to these tables.
 
-create extension if not exists pgcrypto;
-
 create type lead_source as enum (
   'meta', 'instagram', 'youtube', 'whatsapp', 'website', 'referral', 'call', 'other'
 );
@@ -82,7 +80,7 @@ create table message_templates (
   updated_at timestamptz not null default now()
 );
 
-create or replace function touch_updated_at() returns trigger language plpgsql as $$
+create or replace function touch_updated_at() returns trigger language plpgsql set search_path = '' as $$
 begin
   new.updated_at := now();
   return new;
@@ -92,7 +90,7 @@ create trigger leads_updated_at before update on leads
   for each row execute function touch_updated_at();
 
 -- Editing a template's text withdraws its approval.
-create or replace function template_reapproval() returns trigger language plpgsql as $$
+create or replace function template_reapproval() returns trigger language plpgsql set search_path = '' as $$
 begin
   new.updated_at := now();
   if new.body is distinct from old.body and new.approved_at is not distinct from old.approved_at then

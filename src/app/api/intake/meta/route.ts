@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { greetNewLead } from "@/lib/catcher";
+import { catcherConfig } from "@/lib/catcher-config";
 import { captureLead } from "@/lib/leads";
 import { fetchMetaLead, leadgenChanges, metaLeadToInput, verifyMetaSignature } from "@/lib/intake/meta";
 import { getStore } from "@/lib/store";
@@ -31,7 +33,8 @@ export async function POST(req: Request) {
   for (const change of leadgenChanges(JSON.parse(raw))) {
     try {
       const lead = await fetchMetaLead(change.leadgen_id, pageToken);
-      await captureLead(store, metaLeadToInput(lead));
+      const result = await captureLead(store, metaLeadToInput(lead));
+      if (result.created) await greetNewLead(store, catcherConfig(), result.lead);
       results.push({ leadgen_id: change.leadgen_id, ok: true });
     } catch (e) {
       console.error("meta intake failed", change.leadgen_id, e);

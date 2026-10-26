@@ -40,6 +40,11 @@ export interface Lead extends Requirement {
   next_follow_up_at: string | null;
   first_reply_at: string | null;
   notes: string | null;
+  /** Lead Catcher: the question we are waiting on an answer for. */
+  awaiting_question: string | null;
+  asked_questions: string[];
+  last_inbound_at: string | null;
+  prefers_hinglish: boolean;
   created_at: string;
   updated_at: string;
 }

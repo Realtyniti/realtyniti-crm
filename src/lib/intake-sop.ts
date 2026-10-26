@@ -23,7 +23,7 @@ export const QUALIFYING_QUESTIONS: QualifyingQuestion[] = [
   {
     key: "budget",
     ask: "What budget range are you considering?",
-    askHinglish: "Aapka budget kitna hai, roughly kis range mein?",
+    askHinglish: "Aapka budget roughly kis range mein hai?",
     isAnswered: (r) => r.budget_max_inr != null || r.budget_min_inr != null,
   },
   {

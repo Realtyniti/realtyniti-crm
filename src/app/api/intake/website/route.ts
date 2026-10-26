@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
+import { greetNewLead } from "@/lib/catcher";
+import { catcherConfig } from "@/lib/catcher-config";
 import { captureLead, LeadError } from "@/lib/leads";
 import { WebsiteFormSchema, websiteFormToLead } from "@/lib/intake/website";
 import { getStore } from "@/lib/store";
@@ -21,7 +23,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
 
   try {
-    const result = await captureLead(getStore(), websiteFormToLead(parsed.data));
+    const store = getStore();
+    const result = await captureLead(store, websiteFormToLead(parsed.data));
+    if (result.created) await greetNewLead(store, catcherConfig(), result.lead);
     return NextResponse.json({ id: result.lead.id, created: result.created }, { status: result.created ? 201 : 200 });
   } catch (e) {
     if (e instanceof LeadError) return NextResponse.json({ error: e.message }, { status: 400 });

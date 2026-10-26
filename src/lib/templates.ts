@@ -1,3 +1,4 @@
+import { QUALIFYING_QUESTIONS } from "./intake-sop";
 import { checkMoney } from "./price-guard";
 import type { LeadSource, MessageTemplate } from "./types";
 
@@ -48,6 +49,40 @@ export const DEFAULT_TEMPLATES: Omit<MessageTemplate, "approved_at" | "updated_a
     channel: null,
     purpose: "Pre-approved overview for warm leads (no figures)",
     body: "Hi {{name}}, based on what you shared, here are a few projects in {{micro_market}} worth a look. Would you like to plan a site visit this weekend?",
+  },
+  // Lead Catcher (SYS-02): the five questions, asked one at a time, in English and Hinglish.
+  ...QUALIFYING_QUESTIONS.flatMap((q, i) => [
+    { key: `question.${q.key}`, channel: null, purpose: `Question ${i + 1}: ${q.key.replace("_", " ")}`, body: q.ask },
+    {
+      key: `question.${q.key}.hi`,
+      channel: null,
+      purpose: `Question ${i + 1}: ${q.key.replace("_", " ")} (Hinglish)`,
+      body: q.askHinglish,
+    },
+  ]),
+  {
+    key: "question.site_visit",
+    channel: null,
+    purpose: "Ask for a site visit after the five questions",
+    body: "Thanks {{name}}! Would you like to see a couple of matching projects in person this weekend?",
+  },
+  {
+    key: "question.site_visit.hi",
+    channel: null,
+    purpose: "Ask for a site visit after the five questions (Hinglish)",
+    body: "Thanks {{name}}! Kya aap is weekend kuch matching projects dekhne aana chahenge?",
+  },
+  {
+    key: "catcher.hot_handoff",
+    channel: null,
+    purpose: "Hot lead: tell the buyer Chetan will call to fix the visit",
+    body: "Great, {{name}}. Chetan will call you shortly to fix a convenient time for the site visit.",
+  },
+  {
+    key: "catcher.cold_nurture",
+    channel: null,
+    purpose: "Cold lead: polite close, placed on the slow nurture list",
+    body: "Thanks {{name}}, noted. I'll share new launches and updates in {{micro_market}} from time to time. Message here whenever you're ready.",
   },
 ];
 

@@ -19,6 +19,17 @@ describe("checkMoney", () => {
   );
 });
 
+describe("incoming messages", () => {
+  it("a buyer stating their budget is not a price question", () => {
+    expect(checkMoney("around 55 lakh", { incoming: true }).mentionsMoney).toBe(false);
+    expect(checkMoney("₹1.2 cr max", { incoming: true }).mentionsMoney).toBe(false);
+  });
+  it("asking about price still is", () => {
+    expect(checkMoney("55 lakh mein koi offer?", { incoming: true }).mentionsMoney).toBe(true);
+    expect(checkMoney("what's the price", { incoming: true }).mentionsMoney).toBe(true);
+  });
+});
+
 describe("templates", () => {
   it("every default template is free of money talk", () => {
     for (const t of DEFAULT_TEMPLATES) expect(templateProblems(t.body), t.key).toEqual([]);
