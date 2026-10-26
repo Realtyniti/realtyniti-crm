@@ -1,4 +1,4 @@
-import type { Lead, LeadEvent, LeadTouch, MessageTemplate } from "../types";
+import type { Lead, LeadEvent, LeadTouch, MessageTemplate, SiteVisit, VisitSlot } from "../types";
 
 export type NewLead = Omit<Lead, "id" | "created_at" | "updated_at">;
 export type LeadPatch = Partial<Omit<Lead, "id" | "created_at" | "updated_at">>;
@@ -27,4 +27,20 @@ export interface Store {
   listTemplates(): Promise<MessageTemplate[]>;
   getTemplate(key: string): Promise<MessageTemplate | null>;
   upsertTemplate(t: Omit<MessageTemplate, "updated_at">): Promise<MessageTemplate>;
+
+  listSlots(filter?: { from?: string; openOnly?: boolean }): Promise<VisitSlot[]>;
+  getSlot(id: string): Promise<VisitSlot | null>;
+  insertSlot(slot: Omit<VisitSlot, "id" | "created_at">): Promise<VisitSlot>;
+  updateSlot(id: string, patch: Partial<Omit<VisitSlot, "id" | "created_at">>): Promise<VisitSlot>;
+
+  listVisits(filter?: VisitFilter): Promise<SiteVisit[]>;
+  insertVisit(visit: Omit<SiteVisit, "id" | "created_at" | "reminder_evening_sent_at" | "reminder_2h_sent_at">): Promise<SiteVisit>;
+  updateVisit(id: string, patch: Partial<Omit<SiteVisit, "id" | "created_at">>): Promise<SiteVisit>;
+}
+
+export interface VisitFilter {
+  leadId?: string;
+  slotId?: string;
+  slotIds?: string[];
+  status?: SiteVisit["status"];
 }

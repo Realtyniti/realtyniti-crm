@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DEFAULT_TEMPLATES } from "../templates";
-import type { Lead, LeadEvent, LeadTouch, MessageTemplate } from "../types";
-import type { LeadFilter, LeadPatch, NewLead, Store } from "./types";
+import type { Lead, LeadEvent, LeadTouch, MessageTemplate, SiteVisit, VisitSlot } from "../types";
+import type { LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
 
 /** In-process store. Data is lost on restart; used for local demo and tests. */
 export class MemoryStore implements Store {
@@ -9,6 +9,8 @@ export class MemoryStore implements Store {
   private touches: LeadTouch[] = [];
   private events: LeadEvent[] = [];
   private templates = new Map<string, MessageTemplate>();
+  private slots = new Map<string, VisitSlot>();
+  private visits = new Map<string, SiteVisit>();
 
   constructor() {
     const now = new Date().toISOString();
@@ -87,6 +89,64 @@ export class MemoryStore implements Store {
     const approved_at = prev && prev.body !== t.body && prev.approved_at === t.approved_at ? null : t.approved_at;
     const row = { ...t, approved_at, updated_at: new Date().toISOString() };
     this.templates.set(t.key, row);
+    return row;
+  }
+
+  async listSlots(filter: { from?: string; openOnly?: boolean } = {}) {
+    return [...this.slots.values()]
+      .filter((s) => !filter.from || s.starts_at >= filter.from)
+      .filter((s) => !filter.openOnly || s.is_open)
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  }
+
+  async getSlot(id: string) {
+    return this.slots.get(id) ?? null;
+  }
+
+  async insertSlot(slot: Omit<VisitSlot, "id" | "created_at">) {
+    const row = { ...slot, id: randomUUID(), created_at: new Date().toISOString() };
+    this.slots.set(row.id, row);
+    return row;
+  }
+
+  async updateSlot(id: string, patch: Partial<Omit<VisitSlot, "id" | "created_at">>) {
+    const cur = this.slots.get(id);
+    if (!cur) throw new Error(`slot ${id} not found`);
+    const row = { ...cur, ...patch };
+    this.slots.set(id, row);
+    return row;
+  }
+
+  async listVisits(filter: VisitFilter = {}) {
+    return [...this.visits.values()]
+      .filter((v) => !filter.leadId || v.lead_id === filter.leadId)
+      .filter((v) => !filter.slotId || v.slot_id === filter.slotId)
+      .filter((v) => !filter.slotIds || filter.slotIds.includes(v.slot_id))
+      .filter((v) => !filter.status || v.status === filter.status)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+
+  async insertVisit(visit: Omit<SiteVisit, "id" | "created_at" | "reminder_evening_sent_at" | "reminder_2h_sent_at">) {
+    // Mirrors the one-live-booking-per-lead unique index.
+    if (visit.status === "booked" && [...this.visits.values()].some((v) => v.lead_id === visit.lead_id && v.status === "booked")) {
+      throw new Error("lead already has a live booking");
+    }
+    const row: SiteVisit = {
+      ...visit,
+      id: randomUUID(),
+      created_at: new Date().toISOString(),
+      reminder_evening_sent_at: null,
+      reminder_2h_sent_at: null,
+    };
+    this.visits.set(row.id, row);
+    return row;
+  }
+
+  async updateVisit(id: string, patch: Partial<Omit<SiteVisit, "id" | "created_at">>) {
+    const cur = this.visits.get(id);
+    if (!cur) throw new Error(`visit ${id} not found`);
+    const row = { ...cur, ...patch };
+    this.visits.set(id, row);
     return row;
   }
 }

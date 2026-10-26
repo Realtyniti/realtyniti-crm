@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { captureLead, clearChetanFlag, closeLead, LeadError, saveTemplate, updateRequirement } from "@/lib/leads";
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "@/lib/parse";
+import { importLeads } from "@/lib/import";
 import { getStore } from "@/lib/store";
+import { setVisitStatus } from "@/lib/visits";
 import { LEAD_SOURCES, type LeadSource } from "@/lib/types";
 
 export interface ActionState {
@@ -104,4 +106,60 @@ export async function saveTemplateAction(key: string, _: ActionState, fd: FormDa
   if (err) return err;
   revalidatePath("/templates");
   return { ok: approve ? "Approved." : "Saved (not approved)." };
+}
+
+export async function createSlotsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const date = str(fd, "date");
+  const time = str(fd, "time");
+  const area = str(fd, "area");
+  const minutes = Number(str(fd, "minutes") ?? 60);
+  const count = Math.min(12, Math.max(1, Number(str(fd, "count") ?? 1)));
+  const capacity = Math.min(10, Math.max(1, Number(str(fd, "capacity") ?? 1)));
+  if (!date || !time || !area) return { error: "Date, start time and area are needed." };
+  // Times are entered in India time.
+  const first = new Date(`${date}T${time}:00+05:30`);
+  if (Number.isNaN(first.getTime())) return { error: "That date or time is not valid." };
+  if (first.getTime() < Date.now()) return { error: "That time has already passed." };
+
+  const store = getStore();
+  for (let i = 0; i < count; i++) {
+    const start = new Date(first.getTime() + i * minutes * 60_000);
+    await store.insertSlot({
+      starts_at: start.toISOString(),
+      ends_at: new Date(start.getTime() + minutes * 60_000).toISOString(),
+      area,
+      address: str(fd, "address"),
+      map_url: str(fd, "map_url"),
+      capacity,
+      is_open: true,
+    });
+  }
+  revalidatePath("/visits");
+  return { ok: `Opened ${count} slot${count === 1 ? "" : "s"}.` };
+}
+
+export async function toggleSlotAction(id: string, open: boolean) {
+  await getStore().updateSlot(id, { is_open: open });
+  revalidatePath("/visits");
+}
+
+export async function visitStatusAction(visitId: string, leadId: string, status: "done" | "no_show" | "cancelled") {
+  await setVisitStatus(getStore(), visitId, leadId, status);
+  revalidatePath("/visits");
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function importLeadsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const csv = str(fd, "csv");
+  const fallback = str(fd, "source") as LeadSource | null;
+  if (!csv) return { error: "Paste the leads first." };
+  const result = await importLeads(getStore(), csv, fallback && LEAD_SOURCES.includes(fallback) ? fallback : "other");
+  revalidatePath("/");
+  revalidatePath("/board");
+  const parts = [`${result.created} new`, `${result.merged} added to existing cards`];
+  if (result.closed) parts.push(`${result.closed} closed as lost`);
+  return {
+    ok: `Imported: ${parts.join(", ")}.`,
+    error: result.errors.length ? `Skipped ${result.errors.length}: ${result.errors.slice(0, 5).join("; ")}` : undefined,
+  };
 }

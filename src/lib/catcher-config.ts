@@ -1,6 +1,7 @@
 import "server-only";
 import type { CatcherConfig } from "./catcher";
 import { normalisePhone } from "./phone";
+import { bookingToken } from "./visits";
 import { CloudApiSender, DryRunSender, type WhatsAppSender } from "./whatsapp";
 
 let sender: WhatsAppSender | undefined;
@@ -18,5 +19,14 @@ export function catcherConfig(): CatcherConfig {
     chetanPhone: normalisePhone(process.env.CHETAN_WHATSAPP),
     openerTemplate: opener ? { name: opener, language } : null,
     alertTemplate: alert ? { name: alert, language } : null,
+    bookingUrl: bookingUrlFor,
   };
+}
+
+/** The buyer's personal Site Visit Booker link, or null when BOOKING_SECRET is not set. */
+export function bookingUrlFor(leadId: string): string | null {
+  const secret = process.env.BOOKING_SECRET;
+  if (!secret) return null;
+  const base = (process.env.APP_URL || "https://realtyniti-crm.vercel.app").replace(/\/$/, "");
+  return `${base}/book/${bookingToken(leadId, secret)}`;
 }

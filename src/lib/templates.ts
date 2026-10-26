@@ -79,6 +79,30 @@ export const DEFAULT_TEMPLATES: Omit<MessageTemplate, "approved_at" | "updated_a
     body: "Great, {{name}}. Chetan will call you shortly to fix a convenient time for the site visit.",
   },
   {
+    key: "catcher.hot_booking",
+    channel: null,
+    purpose: "Hot lead: send the Site Visit Booker link",
+    body: "Great, {{name}}! Pick a day and time that suits you for the site visit here: {{booking_link}}",
+  },
+  {
+    key: "visit.confirmed",
+    channel: null,
+    purpose: "Site visit booked: confirmation to the buyer",
+    body: "Your site visit is confirmed, {{name}}: {{when}}, {{area}}. {{address}} {{map_url}} Chetan will meet you there. To change the time, use the same link: {{booking_link}}",
+  },
+  {
+    key: "visit.reminder_evening",
+    channel: null,
+    purpose: "Site visit reminder, the evening before",
+    body: "Hi {{name}}, a reminder of your site visit tomorrow, {{when}}, {{area}}. {{map_url}} See you there!",
+  },
+  {
+    key: "visit.reminder_2h",
+    channel: null,
+    purpose: "Site visit reminder, two hours before",
+    body: "Hi {{name}}, see you in about two hours for the site visit at {{when}}, {{area}}. {{map_url}}",
+  },
+  {
     key: "catcher.cold_nurture",
     channel: null,
     purpose: "Cold lead: polite close, placed on the slow nurture list",
@@ -114,7 +138,7 @@ export function renderForSending(t: MessageTemplate, vars: Record<string, string
   if (money.mentionsMoney) {
     throw new TemplateError(`Message for "${t.key}" mentions money (${money.matched.join(", ")}); held for Chetan.`);
   }
-  return text.replace(/\s+([,.])/g, "$1");
+  return text.replace(/\s+([,.])/g, "$1").replace(/ {2,}/g, " ").trim();
 }
 
 export function firstReplyKey(source: LeadSource): string {

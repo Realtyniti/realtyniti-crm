@@ -2,9 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { addNoteAction, clearFlagAction } from "@/app/actions";
 import { SourceBadge, STATUS_LABEL, TemperatureBadge } from "@/components/badges";
+import { CopyButton } from "@/components/copy-button";
+import { bookingUrlFor } from "@/lib/catcher-config";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { classify, nextQuestion, unansweredQuestions } from "@/lib/intake-sop";
 import { getStore } from "@/lib/store";
+import { formatSlot } from "@/lib/visits";
 import { CloseLeadForm, EditLeadForm } from "./forms";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +25,13 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
   const store = getStore();
   const lead = await store.getLead(id);
   if (!lead) notFound();
-  const [touches, events] = await Promise.all([store.listTouches(id), store.listEvents(id)]);
+  const [touches, events, visits] = await Promise.all([
+    store.listTouches(id),
+    store.listEvents(id),
+    store.listVisits({ leadId: id }),
+  ]);
+  const visitSlots = await Promise.all(visits.map((v) => store.getSlot(v.slot_id)));
+  const bookingLink = bookingUrlFor(lead.id);
   const sources = [...new Set(touches.map((t) => t.source))];
   const missing = unansweredQuestions(lead);
   const ask = nextQuestion(lead);
@@ -114,6 +123,24 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
                   <p className="text-green-700">All five questions answered.</p>
                 )}
               </>
+            )}
+          </section>
+
+          <section className="panel space-y-2 text-sm">
+            <h2 className="font-medium">Site visits</h2>
+            {visits.length === 0 && <p className="text-stone-500">None booked.</p>}
+            <ul className="space-y-1">
+              {visits.map((v, i) => (
+                <li key={v.id} className={v.status === "cancelled" ? "text-stone-400 line-through" : ""}>
+                  {visitSlots[i] ? `${formatSlot(visitSlots[i]!)}, ${visitSlots[i]!.area}` : "Slot removed"} ·{" "}
+                  {v.status.replace("_", "-")}
+                </li>
+              ))}
+            </ul>
+            {bookingLink ? (
+              <CopyButton text={bookingLink} label="Copy booking link" />
+            ) : (
+              <p className="text-xs text-stone-500">Booking links need BOOKING_SECRET set.</p>
             )}
           </section>
 

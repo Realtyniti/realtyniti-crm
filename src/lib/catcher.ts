@@ -22,6 +22,8 @@ export interface CatcherConfig {
   openerTemplate: { name: string; language: string } | null;
   /** Meta-registered template for alerts to Chetan; {{1}} = the alert line. */
   alertTemplate: { name: string; language: string } | null;
+  /** Site Visit Booker link for a lead, when bookings are set up. */
+  bookingUrl?: (leadId: string) => string | null;
 }
 
 const SITE_VISIT = "site_visit";
@@ -62,12 +64,18 @@ export function answerFor(step: Step, text: string): Partial<Requirement> {
 }
 
 /** Sends one of Chetan's approved templates as free text. Holds it (and says so on the card) if not approved. */
-async function sendApproved(store: Store, cfg: CatcherConfig, lead: Lead, key: string): Promise<boolean> {
+export async function sendApproved(
+  store: Store,
+  cfg: CatcherConfig,
+  lead: Lead,
+  key: string,
+  vars: Record<string, string | null | undefined> = {},
+): Promise<boolean> {
   const t = await store.getTemplate(key);
   let text: string;
   try {
     if (!t) throw new TemplateError(`Template "${key}" does not exist.`);
-    text = renderForSending(t, { name: lead.name?.split(" ")[0], micro_market: lead.micro_market });
+    text = renderForSending(t, { name: lead.name?.split(" ")[0], micro_market: lead.micro_market, ...vars });
   } catch (e) {
     if (!(e instanceof TemplateError)) throw e;
     await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `Not sent: ${e.message}` });
@@ -143,7 +151,10 @@ async function advance(store: Store, cfg: CatcherConfig, lead: Lead): Promise<Le
     status: lead.status === "new" || lead.status === "qualifying" ? "qualified" : lead.status,
   });
   if (temperature === "hot") {
-    await sendApproved(store, cfg, lead, "catcher.hot_handoff");
+    // Hot leads get the Site Visit Booker link when bookings are set up.
+    const link = cfg.bookingUrl?.(lead.id);
+    if (link) await sendApproved(store, cfg, lead, "catcher.hot_booking", { booking_link: link });
+    else await sendApproved(store, cfg, lead, "catcher.hot_handoff");
     await alertChetan(store, cfg, lead, `🔥 Hot lead: ${lead.name ?? "Unnamed"} ${lead.phone} · ${requirementLine(lead)} · via ${lead.first_source}`);
   } else if (temperature === "warm") {
     await sendApproved(store, cfg, lead, "warm.project_overview");

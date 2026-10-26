@@ -1,0 +1,28 @@
+-- Every default template (approval still needed). Safe to re-run.
+insert into message_templates (key, channel, purpose, body) values
+  ('first_reply.meta', 'meta'::lead_source, 'First reply to a Meta lead form', 'Hi {{name}}, this is Chetan from Realtyniti. Thanks for your enquiry on Facebook/Instagram. I help buyers and investors across Noida, Greater Noida and the Yamuna Expressway. Can I ask a few quick questions so I share only what fits you?'),
+  ('first_reply.youtube', 'youtube'::lead_source, 'First reply to a YouTube comment asking for details', 'Hi {{name}}, Chetan from Realtyniti here. Thanks for watching and asking on YouTube. Happy to help you shortlist the right project. A few quick questions first?'),
+  ('first_reply.whatsapp', 'whatsapp'::lead_source, 'First reply to a new WhatsApp message from an unknown number', 'Hi {{name}}, thanks for reaching out to Realtyniti. I''m Chetan. To suggest the right projects in Noida, Greater Noida or the Yamuna Expressway, can I ask you a few quick questions?'),
+  ('first_reply.website', 'website'::lead_source, 'First reply to a website form', 'Hi {{name}}, Chetan from Realtyniti here. I got your enquiry from our website. A few quick questions so I can shortlist the right projects for you?'),
+  ('first_reply.referral', 'referral'::lead_source, 'First reply to a referral', 'Hi {{name}}, Chetan from Realtyniti here. {{referrer}} mentioned you''re looking at property. Glad to help. Can I ask a few quick questions?'),
+  ('money_question.hold', null, 'Reply when a buyer asks about price, payment plan or offers', 'Good question, {{name}}. Chetan will personally share the latest sheet and details with you shortly.'),
+  ('warm.project_overview', null, 'Pre-approved overview for warm leads (no figures)', 'Hi {{name}}, based on what you shared, here are a few projects in {{micro_market}} worth a look. Would you like to plan a site visit this weekend?'),
+  ('question.budget', null, 'Question 1: budget', 'What budget range are you considering?'),
+  ('question.budget.hi', null, 'Question 1: budget (Hinglish)', 'Aapka budget roughly kis range mein hai?'),
+  ('question.micro_market', null, 'Question 2: micro market', 'Which area do you prefer: Noida sectors, Greater Noida West, or the Yamuna Expressway near the airport?'),
+  ('question.micro_market.hi', null, 'Question 2: micro market (Hinglish)', 'Aap kaunsa area prefer karenge: Noida sectors, Greater Noida West, ya Yamuna Expressway (airport ke paas)?'),
+  ('question.property_type', null, 'Question 3: property type', 'What are you looking for: 2BHK, 3BHK, plot, studio or commercial?'),
+  ('question.property_type.hi', null, 'Question 3: property type (Hinglish)', 'Aap kya dekh rahe hain: 2BHK, 3BHK, plot, studio ya commercial?'),
+  ('question.purpose', null, 'Question 4: purpose', 'Is this for your own use or as an investment?'),
+  ('question.purpose.hi', null, 'Question 4: purpose (Hinglish)', 'Yeh khud rehne ke liye hai ya investment ke liye?'),
+  ('question.timeline', null, 'Question 5: timeline', 'When are you planning to decide?'),
+  ('question.timeline.hi', null, 'Question 5: timeline (Hinglish)', 'Aap kab tak decide karna chahte hain?'),
+  ('question.site_visit', null, 'Ask for a site visit after the five questions', 'Thanks {{name}}! Would you like to see a couple of matching projects in person this weekend?'),
+  ('question.site_visit.hi', null, 'Ask for a site visit after the five questions (Hinglish)', 'Thanks {{name}}! Kya aap is weekend kuch matching projects dekhne aana chahenge?'),
+  ('catcher.hot_handoff', null, 'Hot lead: tell the buyer Chetan will call to fix the visit', 'Great, {{name}}. Chetan will call you shortly to fix a convenient time for the site visit.'),
+  ('catcher.hot_booking', null, 'Hot lead: send the Site Visit Booker link', 'Great, {{name}}! Pick a day and time that suits you for the site visit here: {{booking_link}}'),
+  ('visit.confirmed', null, 'Site visit booked: confirmation to the buyer', 'Your site visit is confirmed, {{name}}: {{when}}, {{area}}. {{address}} {{map_url}} Chetan will meet you there. To change the time, use the same link: {{booking_link}}'),
+  ('visit.reminder_evening', null, 'Site visit reminder, the evening before', 'Hi {{name}}, a reminder of your site visit tomorrow, {{when}}, {{area}}. {{map_url}} See you there!'),
+  ('visit.reminder_2h', null, 'Site visit reminder, two hours before', 'Hi {{name}}, see you in about two hours for the site visit at {{when}}, {{area}}. {{map_url}}'),
+  ('catcher.cold_nurture', null, 'Cold lead: polite close, placed on the slow nurture list', 'Thanks {{name}}, noted. I''ll share new launches and updates in {{micro_market}} from time to time. Message here whenever you''re ready.')
+on conflict (key) do nothing;

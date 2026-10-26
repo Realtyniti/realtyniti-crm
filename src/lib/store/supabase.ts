@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Lead, LeadEvent, LeadTouch, MessageTemplate } from "../types";
-import type { LeadFilter, LeadPatch, NewLead, Store } from "./types";
+import type { Lead, LeadEvent, LeadTouch, MessageTemplate, SiteVisit, VisitSlot } from "../types";
+import type { LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
 
 /** Server-only store backed by Supabase, using the service role key. */
 export class SupabaseStore implements Store {
@@ -68,6 +68,42 @@ export class SupabaseStore implements Store {
 
   async upsertTemplate(t: Omit<MessageTemplate, "updated_at">) {
     return must<MessageTemplate>(await this.db.from("message_templates").upsert(t).select().single());
+  }
+
+  async listSlots(filter: { from?: string; openOnly?: boolean } = {}) {
+    let q = this.db.from("visit_slots").select("*").order("starts_at").limit(500);
+    if (filter.from) q = q.gte("starts_at", filter.from);
+    if (filter.openOnly) q = q.eq("is_open", true);
+    return many<VisitSlot>(await q);
+  }
+
+  async getSlot(id: string) {
+    return one<VisitSlot>(await this.db.from("visit_slots").select("*").eq("id", id).maybeSingle());
+  }
+
+  async insertSlot(slot: Omit<VisitSlot, "id" | "created_at">) {
+    return must<VisitSlot>(await this.db.from("visit_slots").insert(slot).select().single());
+  }
+
+  async updateSlot(id: string, patch: Partial<Omit<VisitSlot, "id" | "created_at">>) {
+    return must<VisitSlot>(await this.db.from("visit_slots").update(patch).eq("id", id).select().single());
+  }
+
+  async listVisits(filter: VisitFilter = {}) {
+    let q = this.db.from("site_visits").select("*").order("created_at").limit(1000);
+    if (filter.leadId) q = q.eq("lead_id", filter.leadId);
+    if (filter.slotId) q = q.eq("slot_id", filter.slotId);
+    if (filter.slotIds) q = q.in("slot_id", filter.slotIds);
+    if (filter.status) q = q.eq("status", filter.status);
+    return many<SiteVisit>(await q);
+  }
+
+  async insertVisit(visit: Omit<SiteVisit, "id" | "created_at" | "reminder_evening_sent_at" | "reminder_2h_sent_at">) {
+    return must<SiteVisit>(await this.db.from("site_visits").insert(visit).select().single());
+  }
+
+  async updateVisit(id: string, patch: Partial<Omit<SiteVisit, "id" | "created_at">>) {
+    return must<SiteVisit>(await this.db.from("site_visits").update(patch).eq("id", id).select().single());
   }
 }
 

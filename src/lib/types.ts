@@ -87,3 +87,30 @@ export interface LeadInput extends Partial<Requirement> {
   raw?: unknown;
   received_at?: string;
 }
+
+export interface VisitSlot {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  area: string;
+  address: string | null;
+  map_url: string | null;
+  capacity: number;
+  is_open: boolean;
+  created_at: string;
+}
+
+export type VisitStatus = "booked" | "cancelled" | "done" | "no_show";
+
+export interface SiteVisit {
+  id: string;
+  lead_id: string;
+  slot_id: string;
+  project_interest: string | null;
+  pickup: string | null;
+  people: number;
+  status: VisitStatus;
+  reminder_evening_sent_at: string | null;
+  reminder_2h_sent_at: string | null;
+  created_at: string;
+}

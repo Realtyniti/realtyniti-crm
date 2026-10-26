@@ -8,8 +8,8 @@ Every Realtyniti lead on one card, built from the Realtyniti AI Systems Blueprin
 |---|---|---|---|
 | 1 | **Foundation:** Lead Card database, Intake SOP rules, approved templates with price guard, website and Meta lead-form intake, leads screen | F-00, SYS-01 | **Built** |
 | 2 | **Lead Catcher on WhatsApp:** first reply within minutes, five questions one at a time, hot/warm/cold tag, hot-lead alert and morning digest | SYS-02 | **Built** (needs WhatsApp keys to go live) |
-| 3 | **Pipeline Board + Site Visit Booker**, import of existing leads | SYS-03, SYS-04 | Next |
-| 4 | **Follow-up Clock, Project Sheet SOP, Channel Board** | SYS-05, SYS-06, SYS-07 | |
+| 3 | **Pipeline Board + Site Visit Booker**, import of existing leads | SYS-03, SYS-04 | **Built** |
+| 4 | **Follow-up Clock, Project Sheet SOP, Channel Board** | SYS-05, SYS-06, SYS-07 | Next |
 | 5 | **Months 4–12:** Project Book, Match Finder, Freshness Check, then Niti, Lead Keeper, Project Keeper | | |
 
 ## Guardrails built in
@@ -36,6 +36,18 @@ Replace them with his own wording; everything else reads from that file.
   the questions start when they reply.
 - 9 AM IST digest to Chetan via Vercel Cron (`vercel.json`).
 - Any template Chetan has not approved is held and noted on the card instead of being sent.
+
+## Pipeline Board and Site Visit Booker (Phase 3)
+
+- `/board`: follow-ups due today (soonest deciders first), money questions, scheduled visits, new leads,
+  upcoming follow-ups, converted, lost grouped by reason, and a source-wise table.
+- `/visits`: Chetan opens slots (date, start, length, how many in a row, area, address, map link, visitors per slot).
+- `/book/<token>`: the buyer's personal, signed link. Only open slots at least 2 hours ahead; pickup from
+  Noida Sector 18 or Pari Chowk; re-booking moves the visit and frees the old slot. Hot leads get the link automatically.
+- Confirmation on WhatsApp, alert to Chetan, reminders the evening before (after 6 PM IST) and 2 hours before
+  (hourly Supabase pg_cron call to `/api/cron/reminders`).
+- `/import`: paste existing leads from Excel or Google Sheets; duplicates merge by phone, lost rows need a reason,
+  and nobody is messaged.
 
 ## Run locally
 
