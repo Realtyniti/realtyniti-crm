@@ -62,7 +62,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const advanced = [query.source, query.status, query.budget, query.sort === "recent" ? "x" : null].filter(Boolean).length;
   const from = total === 0 ? 0 : (query.page - 1) * PAGE_SIZE + 1;
-  // With the Calling Assistant open the list keeps only what a caller needs.
+  // With the Calling Assistant open the list keeps only what a caller needs; the panel shows the requirement.
   const cols = columnClasses(!!callLead);
 
   return (
@@ -205,7 +205,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               <thead>
                 <tr className="border-b border-line bg-subtle/60 text-left text-[11px] font-semibold tracking-[0.06em] text-muted uppercase">
                   <th className="px-4 py-2.5">Client</th>
-                  <th className="px-4 py-2.5">Requirement</th>
+                  <th className={`px-4 py-2.5 ${cols.req}`}>Requirement</th>
                   <th className={`px-4 py-2.5 ${cols.budget}`}>Budget</th>
                   <th className="px-4 py-2.5">Tag</th>
                   <th className={`px-4 py-2.5 ${cols.agent}`}>Agent</th>
@@ -284,8 +284,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
 function columnClasses(compact: boolean) {
   return compact
-    ? { budget: "hidden 2xl:table-cell", agent: "hidden", enquired: "hidden" }
-    : { budget: "hidden lg:table-cell", agent: "hidden xl:table-cell", enquired: "hidden 2xl:table-cell" };
+    ? { req: "hidden 2xl:table-cell", budget: "hidden", agent: "hidden", enquired: "hidden" }
+    : { req: "", budget: "hidden lg:table-cell", agent: "hidden xl:table-cell", enquired: "hidden 2xl:table-cell" };
 }
 
 function PageLink({ disabled, to, label, children }: { disabled: boolean; to: string; label: string; children: React.ReactNode }) {
@@ -359,7 +359,7 @@ function LeadRow({
           </div>
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td className={`px-4 py-3 ${cols.req}`}>
         {req ? <span className="block max-w-[240px] truncate text-ink" title={req}>{req}</span> : <span className="text-faint">Not asked yet</span>}
         <div className="text-[12px] text-muted">{SOURCE_LABEL[l.first_source]}{l.needs_chetan && <span className="ml-1.5 font-medium text-hot">· needs attention</span>}</div>
       </td>
