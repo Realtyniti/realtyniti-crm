@@ -1,10 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isReadOnly } from "@/lib/read-only";
+
+/** Open without the CRM password: webhooks and cron carry their own secrets; buyers open booking links. */
+const PUBLIC = /^\/(api\/intake|api\/whatsapp|api\/cron|book\/|privacy)/;
 
 /*
  * Chetan-only access. Every screen sits behind one password (ADMIN_PASSWORD).
  * Intake webhooks carry their own secrets and are left open here.
  */
 export function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  // A read-only preview serves screens only: no webhooks, cron or admin calls that could write or message anyone.
+  if (isReadOnly() && path.startsWith("/api/")) {
+    return new NextResponse("Read-only preview: API routes are switched off.", { status: 403 });
+  }
+  if (PUBLIC.test(path)) return NextResponse.next();
+
   const password = process.env.ADMIN_PASSWORD;
   if (!password) {
     if (process.env.NODE_ENV === "production") {
@@ -26,5 +37,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api/intake|api/whatsapp|api/cron|book/|privacy|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

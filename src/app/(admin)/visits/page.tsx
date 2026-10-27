@@ -15,14 +15,14 @@ export default async function VisitsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Site visits</h1>
-      <p className="max-w-2xl text-sm text-stone-600">
+      <h1 className="text-2xl font-semibold tracking-tight">Site visits</h1>
+      <p className="max-w-2xl text-sm text-muted">
         Buyers can only pick from slots you open here, at least 2 hours ahead. Hot leads get their booking link
         automatically; you can also copy a link from any lead card.
       </p>
       <NewSlotsForm areas={areas} />
 
-      {days.length === 0 && <p className="panel text-sm text-stone-500">No slots open yet.</p>}
+      {days.length === 0 && <p className="panel text-sm text-muted">No slots open yet.</p>}
       {days.map((day) => (
         <section key={day} className="space-y-2">
           <h2 className="font-medium">{day}</h2>
@@ -32,8 +32,8 @@ export default async function VisitsPage() {
               <div key={s.id} className={`panel flex flex-wrap items-start gap-4 ${s.is_open ? "" : "opacity-60"}`}>
                 <div className="min-w-48">
                   <div className="font-medium">{formatSlotTime(s)}</div>
-                  <div className="text-sm text-stone-600">{s.area}</div>
-                  <div className="text-xs text-stone-500">
+                  <div className="text-sm text-muted">{s.area}</div>
+                  <div className="text-xs text-muted">
                     {s.booked.length}/{s.capacity} booked{s.is_open ? "" : " · closed"}
                   </div>
                 </div>
@@ -45,7 +45,7 @@ export default async function VisitsPage() {
                         <Link href={`/leads/${v.lead_id}`} className="font-medium hover:underline">
                           {l?.name ?? l?.phone ?? "Lead"}
                         </Link>
-                        <span className="text-stone-500">
+                        <span className="text-muted">
                           {v.people} ppl{v.pickup ? ` · pickup ${v.pickup}` : ""}
                           {v.project_interest ? ` · ${v.project_interest}` : ""}
                         </span>

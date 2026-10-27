@@ -18,14 +18,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-4">
-      <Link href="/projects" className="text-sm text-stone-500 hover:underline">
+      <Link href="/projects" className="text-sm text-muted hover:underline">
         ← All projects
       </Link>
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">{p.name}</h1>
-        <span className="text-stone-600">{p.developer}</span>
+        <span className="text-muted">{p.developer}</span>
         <FreshnessDot p={p} />
-        {p.confirmed_by && <span className="text-xs text-stone-500">by {p.confirmed_by}</span>}
+        {p.confirmed_by && <span className="text-xs text-muted">by {p.confirmed_by}</span>}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -34,7 +34,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <aside className="space-y-4">
           <section className="panel space-y-2 text-sm">
             <h2 className="font-medium">Ask the developer to re-confirm</h2>
-            <pre className="whitespace-pre-wrap rounded bg-stone-50 p-2 font-sans text-xs">{confirm}</pre>
+            <pre className="whitespace-pre-wrap rounded bg-subtle p-2 font-sans text-xs">{confirm}</pre>
             <div className="flex gap-2">
               <CopyButton text={confirm} label="Copy" />
               {devPhone && (
@@ -48,18 +48,18 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 </a>
               )}
             </div>
-            <p className="text-xs text-stone-500">When they reply, enter their figures under “Developer replied?”.</p>
+            <p className="text-xs text-muted">When they reply, enter their figures under “Developer replied?”.</p>
           </section>
           <section className="panel space-y-2 text-sm">
             <h2 className="font-medium">Developer replied?</h2>
-            <p className="text-xs text-stone-500">Enter their figures. You&apos;ll see old and new side by side and accept each change.</p>
+            <p className="text-xs text-muted">Enter their figures. You&apos;ll see old and new side by side and accept each change.</p>
             <FreshnessCheck p={p} />
           </section>
           <section className="panel space-y-2 text-sm">
             <h2 className="font-medium">Client summary (draft)</h2>
-            <pre className="whitespace-pre-wrap rounded bg-stone-50 p-2 font-sans text-xs">{summary}</pre>
+            <pre className="whitespace-pre-wrap rounded bg-subtle p-2 font-sans text-xs">{summary}</pre>
             <CopyButton text={summary} label="Copy" />
-            <p className="text-xs text-stone-500">Read every price and offer before you send it; the date beside each shows when it was last confirmed.</p>
+            <p className="text-xs text-muted">Read every price and offer before you send it; the date beside each shows when it was last confirmed.</p>
           </section>
         </aside>
       </div>

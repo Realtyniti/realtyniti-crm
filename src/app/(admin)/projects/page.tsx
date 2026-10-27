@@ -13,12 +13,12 @@ export default async function ProjectsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">Projects</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
         <Link href="/projects/new" className="btn-ghost ml-auto">
           Add project
         </Link>
       </div>
-      <p className="max-w-3xl text-sm text-stone-600">
+      <p className="max-w-3xl text-sm text-muted">
         Green: confirmed in the last {FRESH_DAYS} days. Amber: {FRESH_DAYS}–{STALE_DAYS} days. Red: older or never; confirm
         with the developer before sharing any figure. Tick two or three projects to draft a comparison.
       </p>
@@ -31,12 +31,12 @@ export default async function ProjectsPage() {
       )}
 
       {projects.length === 0 ? (
-        <p className="panel text-sm text-stone-500">No projects yet. Add each developer project you work with once.</p>
+        <p className="panel text-sm text-muted">No projects yet. Add each developer project you work with once.</p>
       ) : (
         <form action="/projects/compare" className="space-y-2">
-          <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+          <div className="overflow-x-auto rounded-lg border border-line bg-white">
             <table className="w-full text-sm">
-              <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+              <thead className="bg-subtle text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2"></th>
                   <th className="px-3 py-2">Project</th>
@@ -48,9 +48,9 @@ export default async function ProjectsPage() {
                   <th className="px-3 py-2">Freshness</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-line">
                 {sorted.map((p) => (
-                  <tr key={p.id} className="hover:bg-stone-50">
+                  <tr key={p.id} className="hover:bg-subtle">
                     <td className="px-3 py-2">
                       <input type="checkbox" name="ids" value={p.id} aria-label={`Compare ${p.name}`} />
                     </td>
@@ -58,14 +58,14 @@ export default async function ProjectsPage() {
                       <Link href={`/projects/${p.id}`} className="font-medium hover:underline">
                         {p.name}
                       </Link>
-                      <div className="text-xs text-stone-500">{p.developer}</div>
+                      <div className="text-xs text-muted">{p.developer}</div>
                     </td>
                     <td className="px-3 py-2">{[p.sector, p.micro_market].filter(Boolean).join(", ")}</td>
                     <td className="px-3 py-2">{p.configurations}</td>
                     <td className="px-3 py-2">{formatBudget(p.price_min_inr, p.price_max_inr)}</td>
                     <td className="px-3 py-2">
                       {p.offers}
-                      {p.offer_valid_until && <div className="text-xs text-stone-500">till {formatDate(p.offer_valid_until)}</div>}
+                      {p.offer_valid_until && <div className="text-xs text-muted">till {formatDate(p.offer_valid_until)}</div>}
                     </td>
                     <td className="px-3 py-2">{AVAILABILITY_LABEL[p.availability]}</td>
                     <td className="px-3 py-2">

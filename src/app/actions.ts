@@ -8,6 +8,7 @@ import { markFollowedUp } from "@/lib/followup-clock";
 import { importLeads } from "@/lib/import";
 import { acceptedPatch, FIGURE_LABEL, figureChanges, figuresFromForm, projectFromForm, type FigureChange, type FigureKey } from "@/lib/projects";
 import { getStore } from "@/lib/store";
+import { isReadOnly, ReadOnlyError } from "@/lib/read-only";
 import { setVisitStatus } from "@/lib/visits";
 import { LEAD_SOURCES, type LeadSource, type ProjectInput } from "@/lib/types";
 
@@ -39,12 +40,13 @@ async function run(fn: () => Promise<unknown>): Promise<ActionState | null> {
     await fn();
     return null;
   } catch (e) {
-    if (e instanceof LeadError) return { error: e.message };
+    if (e instanceof LeadError || e instanceof ReadOnlyError) return { error: e.message };
     throw e;
   }
 }
 
 export async function addLeadAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const source = str(fd, "source") as LeadSource | null;
   if (!source || !LEAD_SOURCES.includes(source)) return { error: "Pick where the lead came from." };
   let id = "";
@@ -61,10 +63,12 @@ export async function addLeadAction(_: ActionState, fd: FormData): Promise<Actio
   });
   if (err) return err;
   revalidatePath("/");
+  revalidatePath("/leads");
   redirect(`/leads/${id}`);
 }
 
 export async function updateLeadAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const err = await run(() =>
     updateRequirement(getStore(), id, {
       name: str(fd, "name"),
@@ -76,25 +80,33 @@ export async function updateLeadAction(id: string, _: ActionState, fd: FormData)
   if (err) return err;
   revalidatePath(`/leads/${id}`);
   revalidatePath("/");
+  revalidatePath("/leads");
   return { ok: "Saved." };
 }
 
 export async function closeLeadAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const outcome = str(fd, "outcome") === "converted" ? "converted" : "lost";
   const err = await run(() => closeLead(getStore(), id, outcome, str(fd, "lost_reason")));
   if (err) return err;
   revalidatePath(`/leads/${id}`);
   revalidatePath("/");
+  revalidatePath("/leads");
   return { ok: outcome === "lost" ? "Closed as lost." : "Marked converted." };
 }
 
 export async function clearFlagAction(id: string) {
+  // Read-only preview: nothing to do; the banner says so.
+  if (isReadOnly()) return;
   await clearChetanFlag(getStore(), id);
   revalidatePath(`/leads/${id}`);
   revalidatePath("/");
+  revalidatePath("/leads");
 }
 
 export async function addNoteAction(id: string, fd: FormData) {
+  // Read-only preview: nothing to do; the banner says so.
+  if (isReadOnly()) return;
   const body = str(fd, "body");
   if (!body) return;
   await getStore().addEvent({ lead_id: id, kind: "note", channel: null, body });
@@ -102,6 +114,7 @@ export async function addNoteAction(id: string, fd: FormData) {
 }
 
 export async function saveTemplateAction(key: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const body = str(fd, "body") ?? "";
   const approve = fd.get("intent") === "approve";
   const err = await run(() => saveTemplate(getStore(), key, body, approve));
@@ -111,6 +124,7 @@ export async function saveTemplateAction(key: string, _: ActionState, fd: FormDa
 }
 
 export async function createSlotsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const date = str(fd, "date");
   const time = str(fd, "time");
   const area = str(fd, "area");
@@ -141,22 +155,28 @@ export async function createSlotsAction(_: ActionState, fd: FormData): Promise<A
 }
 
 export async function toggleSlotAction(id: string, open: boolean) {
+  // Read-only preview: nothing to do; the banner says so.
+  if (isReadOnly()) return;
   await getStore().updateSlot(id, { is_open: open });
   revalidatePath("/visits");
 }
 
 export async function visitStatusAction(visitId: string, leadId: string, status: "done" | "no_show" | "cancelled") {
+  // Read-only preview: nothing to do; the banner says so.
+  if (isReadOnly()) return;
   await setVisitStatus(getStore(), visitId, leadId, status);
   revalidatePath("/visits");
   revalidatePath(`/leads/${leadId}`);
 }
 
 export async function importLeadsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const csv = str(fd, "csv");
   const fallback = str(fd, "source") as LeadSource | null;
   if (!csv) return { error: "Paste the leads first." };
   const result = await importLeads(getStore(), csv, fallback && LEAD_SOURCES.includes(fallback) ? fallback : "other");
   revalidatePath("/");
+  revalidatePath("/leads");
   revalidatePath("/board");
   const parts = [`${result.created} new`, `${result.merged} added to existing cards`];
   if (result.closed) parts.push(`${result.closed} closed as lost`);
@@ -167,6 +187,7 @@ export async function importLeadsAction(_: ActionState, fd: FormData): Promise<A
 }
 
 export async function saveProjectAction(id: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const input = projectFromForm(fd);
   if ("error" in input) return { error: input.error };
   const store = getStore();
@@ -185,12 +206,15 @@ export async function saveProjectAction(id: string | null, _: ActionState, fd: F
 }
 
 export async function markFollowedUpAction(leadId: string, fd: FormData) {
+  // Read-only preview: nothing to do; the banner says so.
+  if (isReadOnly()) return;
   await markFollowedUp(getStore(), leadId, str(fd, "note"));
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/board");
 }
 
 export async function saveSpendAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const source = str(fd, "source") as LeadSource | null;
   const month = str(fd, "month");
   const amount = Number((str(fd, "amount") ?? "").replace(/[,₹\s]/g, ""));
@@ -212,6 +236,7 @@ export interface FigureState {
 
 /** Step 1 of the Freshness Check: show the developer's figures beside the current ones. */
 export async function compareFiguresAction(id: string, _: FigureState, fd: FormData): Promise<FigureState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const project = await getStore().getProject(id);
   if (!project) return { error: "Project not found." };
   const reply = figuresFromForm(fd, project);
@@ -221,6 +246,7 @@ export async function compareFiguresAction(id: string, _: FigureState, fd: FormD
 
 /** Step 2: write only the ticked changes and mark the project confirmed now. */
 export async function acceptFiguresAction(id: string, reply: Partial<ProjectInput>, _: FigureState, fd: FormData): Promise<FigureState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
   const accepted = fd.getAll("accept").filter((v): v is FigureKey => typeof v === "string" && v in FIGURE_LABEL);
   await getStore().updateProject(id, acceptedPatch(reply, accepted, str(fd, "confirmed_by")));
   revalidatePath(`/projects/${id}`);
