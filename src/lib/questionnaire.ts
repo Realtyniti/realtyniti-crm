@@ -77,7 +77,7 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           key: "location",
           label: "Which location do you prefer?",
           multi: true,
-          options: opts("Noida Extension", "Greater Noida", "Noida", "Ghaziabad", "Delhi NCR — Other"),
+          options: opts("Noida Extension", "Greater Noida", "Noida", "Ghaziabad", "Delhi NCR"),
           allowOther: true,
           script:
             "Aapko kaunsa area zyada convenient lagega? Noida Extension, Greater Noida, Noida ya Ghaziabad? Office ya family ke hisaab se koi preference hai?",
@@ -87,7 +87,7 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           label: "What is your preferred possession status?",
           multi: false,
           options: opts("Ready to Move", "Under Construction", "Either", "Not Decided"),
-          allowOther: false,
+          allowOther: true,
           script: "Aap ready-to-move property chahte hain, ya under-construction bhi chalega agar price aur payment plan achha ho?",
         },
       ],
@@ -101,7 +101,7 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           label: "When are you planning to purchase?",
           multi: false,
           options: opts("Immediately", "Within 30 Days", "Within 1–3 Months", "Within 3–6 Months", "After 6 Months", "Just Exploring"),
-          allowOther: false,
+          allowOther: true,
           script: "Aap kab tak final decision lena chahte hain? Agar sahi property mil jaaye toh kya aap jaldi book karna chahenge?",
         },
         {
@@ -109,7 +109,7 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           label: "What is your buying purpose?",
           multi: false,
           options: opts("Self-Use", "Investment", "Both"),
-          allowOther: false,
+          allowOther: true,
           script: "Yeh property aap khud rehne ke liye le rahe hain, ya investment ke point of view se?",
         },
         {
@@ -117,7 +117,7 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           label: "How are you planning to finance the purchase?",
           multi: false,
           options: opts("Home Loan", "Self-Funding", "Combination", "Not Decided"),
-          allowOther: false,
+          allowOther: true,
           script: "Payment ke liye aap home loan lenge, ya self-funding? Taaki main aapko payment plan ke options bhi bata sakun.",
           followUps: [
             {
@@ -134,7 +134,7 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           label: "Have you already visited or shortlisted any properties?",
           multi: false,
           options: opts("Yes", "No", "Currently Comparing"),
-          allowOther: false,
+          allowOther: true,
           script: "Kya aapne abhi tak koi project visit ya shortlist kiya hai? Kaunse projects compare kar rahe hain?",
         },
       ],
@@ -148,7 +148,7 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           label: "Would you like to schedule a site visit?",
           multi: false,
           options: opts("Today", "Tomorrow", "This Weekend", "Next Week", "Later", "Not Interested"),
-          allowOther: false,
+          allowOther: true,
           script:
             "Sir/Ma'am, ek baar site dekh lenge toh aapko project ka better idea milega. Kya aap is weekend ya kal visit plan kar sakte hain? Pickup bhi arrange ho sakta hai.",
           followUps: [

@@ -11,8 +11,13 @@ const TEMP_LABEL = { hot: "Hot", warm: "Warm", cold: "Cold" } as const;
 const pill = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap";
 
 export function TemperatureBadge({ value }: { value: Lead["temperature"] }) {
-  if (!value) return <span className={`${pill} bg-subtle text-muted`}>Untagged</span>;
-  return <span className={`${pill} ${TEMP_STYLE[value]}`}>{TEMP_LABEL[value]}</span>;
+  if (!value) return <span className={`${pill} bg-subtle font-medium text-muted`}>Untagged</span>;
+  return (
+    <span className={`${pill} gap-1.5 ${TEMP_STYLE[value]}`}>
+      <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      {TEMP_LABEL[value]}
+    </span>
+  );
 }
 
 export const SOURCE_LABEL: Record<LeadSource, string> = {

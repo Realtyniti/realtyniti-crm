@@ -25,7 +25,7 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
             Demo mode: Supabase is not connected, so leads are kept in memory and reset on restart.
           </div>
         )}
-        <header className="sticky top-0 z-30 border-b border-line bg-ground/85 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b border-line bg-surface/85 backdrop-blur">
           <div className="flex items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
             <MobileNav />
             <form action="/leads" className="relative max-w-md flex-1" role="search">
@@ -38,7 +38,7 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
                 name="q"
                 type="search"
                 placeholder="Search leads by name or phone"
-                className="input h-9 rounded-lg pl-9"
+                className="input h-9 rounded-lg border-transparent bg-subtle pl-9 focus:bg-surface"
               />
               <input type="hidden" name="view" value="all" />
             </form>

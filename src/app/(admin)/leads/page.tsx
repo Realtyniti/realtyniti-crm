@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, MessageCircle, Phone, SlidersHorizontal } from "lucide-react";
 import { Avatar, SOURCE_LABEL, STATUS_LABEL, TemperatureBadge } from "@/components/badges";
+import { AssignAgent } from "@/components/assign-agent";
 import { CallAssistant } from "@/components/calling/call-assistant";
 import { LeadRowMenu } from "@/components/lead-row-menu";
 import { formatBudget, formatDate } from "@/lib/format";
@@ -66,7 +67,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const cols = columnClasses(!!callLead);
 
   return (
-    <div className={callLead ? "sm:pr-[440px]" : ""}>
+    <div className={callLead ? "sm:pr-[500px]" : ""}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
@@ -98,7 +99,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 role="tab"
                 aria-selected={on}
                 className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition ${
-                  on ? "border-accent bg-accent text-white" : "border-line bg-surface text-ink hover:bg-subtle"
+                  on ? "border-navy bg-navy text-white shadow-sm" : "border-line bg-surface text-ink hover:border-faint/60 hover:bg-subtle"
                 }`}
               >
                 {VIEW_LABEL[v]}
@@ -203,15 +204,15 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line bg-subtle/60 text-left text-[11px] font-semibold tracking-[0.06em] text-muted uppercase">
-                  <th className="px-4 py-2.5">Client</th>
-                  <th className={`px-4 py-2.5 ${cols.req}`}>Requirement</th>
-                  <th className={`px-4 py-2.5 ${cols.budget}`}>Budget</th>
-                  <th className="px-4 py-2.5">Tag</th>
-                  <th className={`px-4 py-2.5 ${cols.agent}`}>Agent</th>
-                  <th className="px-4 py-2.5 whitespace-nowrap">Next follow-up</th>
-                  <th className={`px-4 py-2.5 ${cols.enquired}`}>Enquired</th>
-                  <th className="px-4 py-2.5 text-right">Actions</th>
+                <tr className="border-b border-line text-left text-[12px] font-medium text-muted">
+                  <th className="px-4 py-3">Client</th>
+                  <th className={`px-4 py-3 ${cols.req}`}>Requirement</th>
+                  <th className={`px-4 py-3 ${cols.budget}`}>Budget</th>
+                  <th className="px-4 py-3">Tag</th>
+                  <th className={`px-4 py-3 ${cols.agent}`}>Agent</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Next follow-up</th>
+                  <th className={`px-4 py-3 ${cols.enquired}`}>Enquired</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -284,8 +285,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
 function columnClasses(compact: boolean) {
   return compact
-    ? { req: "hidden 2xl:table-cell", budget: "hidden", agent: "hidden", enquired: "hidden" }
-    : { req: "", budget: "hidden lg:table-cell", agent: "hidden xl:table-cell", enquired: "hidden 2xl:table-cell" };
+    ? { req: "hidden 2xl:table-cell", budget: "hidden", agent: "hidden 2xl:table-cell", enquired: "hidden" }
+    : { req: "", budget: "hidden xl:table-cell", agent: "hidden lg:table-cell", enquired: "hidden 2xl:table-cell" };
 }
 
 function PageLink({ disabled, to, label, children }: { disabled: boolean; to: string; label: string; children: React.ReactNode }) {
@@ -311,8 +312,14 @@ function FollowUp({ iso }: { iso: string | null }) {
 
 function CallButton({ href }: { href: string }) {
   return (
-    <Link href={href} scroll={false} aria-label="Call" title="Call" className="grid size-8 place-items-center rounded-lg bg-accent text-white shadow-sm transition hover:bg-accent-hover">
-      <Phone className="size-4" />
+    <Link
+      href={href}
+      scroll={false}
+      title="Open the Calling Assistant"
+      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-white shadow-sm transition hover:bg-accent-hover"
+    >
+      <Phone className="size-3.5" />
+      Call
     </Link>
   );
 }
@@ -325,7 +332,7 @@ function WhatsAppButton({ phone }: { phone: string }) {
       rel="noreferrer"
       aria-label="Open WhatsApp chat"
       title="WhatsApp"
-      className="grid size-8 place-items-center rounded-lg bg-wa text-white shadow-sm transition hover:bg-wa-hover"
+      className="grid size-8 place-items-center rounded-lg bg-wa-soft text-wa transition hover:bg-wa hover:text-white"
     >
       <MessageCircle className="size-4" />
     </a>
@@ -347,36 +354,36 @@ function LeadRow({
 }) {
   const req = [l.property_type, l.micro_market].filter(Boolean).join(" · ");
   return (
-    <tr className={`transition ${selected ? "bg-accent-soft/70" : "hover:bg-subtle/50"}`}>
-      <td className="px-4 py-3">
+    <tr className={`group transition ${selected ? "bg-accent-soft/70 shadow-[inset_3px_0_0_var(--color-accent)]" : "hover:bg-subtle/60"}`}>
+      <td className="px-4 py-3.5">
         <div className="flex items-center gap-3">
           <Avatar name={l.name} />
           <div className="min-w-0">
-            <Link href={`/leads/${l.id}`} className="block max-w-[220px] truncate font-semibold text-ink hover:text-accent">
+            <Link href={`/leads/${l.id}`} className="block max-w-[220px] truncate text-[14px] font-semibold text-ink hover:text-accent">
               {l.name ?? "Unnamed"}
             </Link>
             <div className="text-[12.5px] text-muted tabular-nums">{formatPhone(l.phone)}</div>
           </div>
         </div>
       </td>
-      <td className={`px-4 py-3 ${cols.req}`}>
+      <td className={`px-4 py-3.5 ${cols.req}`}>
         {req ? <span className="block max-w-[240px] truncate text-ink" title={req}>{req}</span> : <span className="text-faint">Not asked yet</span>}
         <div className="text-[12px] text-muted">{SOURCE_LABEL[l.first_source]}{l.needs_chetan && <span className="ml-1.5 font-medium text-hot">· needs attention</span>}</div>
       </td>
-      <td className={`px-4 py-3 whitespace-nowrap tabular-nums ${cols.budget}`}>
+      <td className={`px-4 py-3.5 whitespace-nowrap tabular-nums ${cols.budget}`}>
         {formatBudget(l.budget_min_inr, l.budget_max_inr) ?? <span className="text-faint">—</span>}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3.5">
         <TemperatureBadge value={l.temperature} />
       </td>
-      <td className={`px-4 py-3 ${cols.agent}`}>
-        <span className="text-faint">Unassigned</span>
+      <td className={`px-4 py-3.5 ${cols.agent}`}>
+        <AssignAgent agent={null} />
       </td>
-      <td className="px-4 py-3 whitespace-nowrap">
+      <td className="px-4 py-3.5 whitespace-nowrap">
         <FollowUp iso={l.next_follow_up_at} />
       </td>
-      <td className={`px-4 py-3 whitespace-nowrap text-muted tabular-nums ${cols.enquired}`}>{formatDate(enquiredAt)}</td>
-      <td className="px-4 py-3">
+      <td className={`px-4 py-3.5 whitespace-nowrap text-muted tabular-nums ${cols.enquired}`}>{formatDate(enquiredAt)}</td>
+      <td className="px-4 py-3.5">
         <div className="flex items-center justify-end gap-1.5">
           <CallButton href={callHref} />
           <WhatsAppButton phone={l.phone} />
@@ -402,8 +409,11 @@ function LeadCard({ lead: l, callHref }: { lead: Lead; callHref: string }) {
           </div>
           <div className="text-[12.5px] text-muted tabular-nums">{formatPhone(l.phone)}</div>
           <div className="mt-1 text-[13px]">{facts || <span className="text-faint">Requirement not asked yet</span>}</div>
-          <div className="mt-1 text-[12.5px]">
-            Follow-up: <FollowUp iso={l.next_follow_up_at} />
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
+            <span>
+              Follow-up: <FollowUp iso={l.next_follow_up_at} />
+            </span>
+            <AssignAgent agent={null} compact />
           </div>
           <div className="mt-2.5 flex items-center gap-2">
             <Link href={callHref} scroll={false} className="btn h-9 flex-1">

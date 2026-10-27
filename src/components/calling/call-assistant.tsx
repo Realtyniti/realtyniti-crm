@@ -6,12 +6,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
+  ChevronRight,
   Copy,
-  Info,
+  MessageCircle,
   MessageSquareText,
   Phone,
   PhoneOff,
+  Plus,
   StickyNote,
+  UserRound,
   X,
 } from "lucide-react";
 import { Avatar, TemperatureBadge } from "@/components/badges";
@@ -24,6 +27,7 @@ import {
   type FollowUpQuestion,
   type Question,
 } from "@/lib/questionnaire";
+import { formatPhone, whatsappUrl } from "@/lib/lead-display";
 import type { Lead } from "@/lib/types";
 
 export interface CallLead {
@@ -51,11 +55,6 @@ function loadDraft(id: string): Draft {
   } catch {
     return EMPTY;
   }
-}
-
-function formatPhone(p: string) {
-  const m = /^\+91(\d{5})(\d{5})$/.exec(p);
-  return m ? `+91 ${m[1]} ${m[2]}` : p;
 }
 
 /**
@@ -142,85 +141,107 @@ export function CallAssistant({ lead, closeHref, readOnly }: { lead: CallLead; c
 
   const outcomeInfo = CALL_OUTCOMES.find((o) => o.value === outcome);
 
+  const total = QUESTIONNAIRE_V1.sections.reduce((a, s) => a + s.questions.length, 0);
+
   return (
     <div
       ref={panelRef}
       tabIndex={-1}
       role="complementary"
       aria-label={`Calling assistant for ${lead.name ?? "lead"}`}
-      className="fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-line bg-surface shadow-lift outline-none sm:w-[440px]"
+      className="fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-line bg-ground shadow-lift outline-none sm:w-[500px]"
     >
-      {/* Header */}
-      <div className="border-b border-line px-5 pt-4 pb-4">
+      {/* Header: who you are calling, who owns the lead, and how to dial. */}
+      <div className="border-b border-line bg-surface px-6 pt-4 pb-4">
         <div className="flex items-center justify-between">
-          <span className="eyebrow">Calling assistant</span>
-          <Link href={closeHref} scroll={false} className="-mr-2 rounded-lg p-1.5 text-muted hover:bg-subtle hover:text-ink" aria-label="Close">
+          <span className="eyebrow flex items-center gap-1.5">
+            <Phone className="size-3.5 text-accent" />
+            Calling assistant
+          </span>
+          <Link href={closeHref} scroll={false} className="-mr-2 rounded-lg p-1.5 text-muted hover:bg-subtle hover:text-ink" aria-label="Close (Esc)">
             <X className="size-[18px]" />
           </Link>
         </div>
-        <div className="mt-3 flex items-start gap-3">
+        <div className="mt-3 flex items-center gap-3">
           <Avatar name={lead.name} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="truncate text-[16px] font-semibold">{lead.name ?? "Unnamed lead"}</span>
+              <span className="truncate text-[18px] font-semibold tracking-tight">{lead.name ?? "Unnamed lead"}</span>
               <TemperatureBadge value={lead.temperature} />
             </div>
-            <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted tabular-nums">
+            <button
+              type="button"
+              onClick={copyPhone}
+              className="group mt-0.5 flex items-center gap-1.5 rounded text-[14px] text-ink tabular-nums hover:text-accent"
+              aria-label={`Copy ${formatPhone(lead.phone)}`}
+            >
               {formatPhone(lead.phone)}
-              <button type="button" onClick={copyPhone} className="rounded p-1 hover:bg-subtle hover:text-ink" aria-label="Copy phone number">
-                {copied ? <Check className="size-3.5 text-good" /> : <Copy className="size-3.5" />}
-              </button>
-            </div>
-            <div className="mt-0.5 text-xs text-muted">Agent: {lead.agent ?? "Unassigned"}</div>
+              {copied ? (
+                <span className="flex items-center gap-0.5 text-xs font-medium text-good">
+                  <Check className="size-3.5" /> Copied
+                </span>
+              ) : (
+                <Copy className="size-3.5 text-faint group-hover:text-accent" />
+              )}
+            </button>
           </div>
-          <a href={`tel:${lead.phone}`} className="btn h-9 flex-none" aria-label={`Dial ${formatPhone(lead.phone)} on this device`}>
+        </div>
+
+        <dl className="mt-3.5 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line text-[13px]">
+          <div className="bg-surface px-3.5 py-2.5">
+            <dt className="text-[11.5px] text-muted">Assigned agent</dt>
+            <dd className={`mt-0.5 flex items-center gap-1.5 font-medium ${lead.agent ? "text-ink" : "text-muted"}`}>
+              <UserRound className="size-3.5" />
+              {lead.agent ?? "Unassigned"}
+            </dd>
+          </div>
+          <div className="bg-surface px-3.5 py-2.5">
+            <dt className="text-[11.5px] text-muted">Looking for</dt>
+            <dd className="mt-0.5 truncate font-medium">{lead.facts.length > 0 ? lead.facts.join(" · ") : <span className="text-muted">Not asked yet</span>}</dd>
+          </div>
+        </dl>
+
+        <div className="mt-3 flex gap-2">
+          <a href={`tel:${lead.phone}`} className="btn h-10 flex-1 text-[14px]" aria-label={`Dial ${formatPhone(lead.phone)} on this device`}>
             <Phone className="size-4" />
-            Dial
+            Dial {formatPhone(lead.phone)}
+          </a>
+          <a href={whatsappUrl(lead.phone)} target="_blank" rel="noreferrer" className="btn-ghost h-10 px-3" aria-label="Open WhatsApp chat">
+            <MessageCircle className="size-4 text-wa" />
           </a>
         </div>
-        {lead.facts.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {lead.facts.map((f) => (
-              <span key={f} className="rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-muted">
-                {f}
-              </span>
-            ))}
-          </div>
-        )}
+        <p className="mt-2 text-center text-[12px] text-muted">Dial on your phone. The CRM can&apos;t detect the call, so you log how it went.</p>
       </div>
 
       {step === "questions" && (
         <>
-          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
-            <div className="flex gap-2.5 rounded-xl bg-subtle px-3 py-2.5 text-[12.5px] leading-snug text-muted">
-              <Info className="mt-0.5 size-4 flex-none text-accent" />
-              <span>
-                <b className="font-semibold text-ink">Calling from your phone.</b> The CRM can&apos;t see the call, so there&apos;s no live
-                status or timer. Ask what you can, skip the rest, and say how the call went when you finish.
-              </span>
-            </div>
-
+          <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
             {QUESTIONNAIRE_V1.sections.map((section, si) => {
               const open = openSection === section.key;
+              const done = answered[section.key] === section.questions.length;
               return (
-                <section key={section.key} className="rounded-xl border border-line">
+                <section key={section.key} className={`overflow-hidden rounded-2xl border bg-surface shadow-card transition ${open ? "border-accent/30" : "border-line"}`}>
                   <button
                     type="button"
                     onClick={() => setOpenSection(open ? null : section.key)}
                     aria-expanded={open}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-subtle/60"
                   >
-                    <span className="text-sm font-semibold">
-                      <span className="mr-2 text-muted">{String.fromCharCode(65 + si)}</span>
-                      {section.title}
+                    <span
+                      className={`grid size-7 flex-none place-items-center rounded-full text-[12px] font-semibold ${
+                        done ? "bg-good text-white" : open ? "bg-accent text-white" : "bg-subtle text-muted"
+                      }`}
+                    >
+                      {done ? <Check className="size-3.5" /> : si + 1}
                     </span>
-                    <span className="flex items-center gap-2 text-xs text-muted tabular-nums">
-                      {answered[section.key]}/{section.questions.length}
-                      <ChevronDown className={`size-4 transition ${open ? "rotate-180" : ""}`} />
+                    <span className="flex-1 text-[15px] font-semibold">{section.title}</span>
+                    <span className="text-[12.5px] text-muted tabular-nums">
+                      {answered[section.key]} of {section.questions.length}
                     </span>
+                    <ChevronDown className={`size-4 text-muted transition ${open ? "rotate-180" : ""}`} />
                   </button>
                   {open && (
-                    <div className="space-y-5 border-t border-line px-4 py-4">
+                    <div className="divide-y divide-line border-t border-line">
                       {section.questions.map((q, qi) => (
                         <QuestionBlock
                           key={q.key}
@@ -230,20 +251,32 @@ export function CallAssistant({ lead, closeHref, readOnly }: { lead: CallLead; c
                           onChange={(a) => setAnswer(q.key, a)}
                         />
                       ))}
+                      {si < QUESTIONNAIRE_V1.sections.length - 1 && (
+                        <div className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => setOpenSection(QUESTIONNAIRE_V1.sections[si + 1]!.key)}
+                            className="flex items-center gap-1 text-[13px] font-medium text-accent hover:underline"
+                          >
+                            Next: {QUESTIONNAIRE_V1.sections[si + 1]!.title}
+                            <ChevronRight className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </section>
               );
             })}
 
-            <div>
-              <label htmlFor="call-notes" className="label">
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+              <label htmlFor="call-notes" className="text-[14px] font-semibold">
                 Call notes
               </label>
               <textarea
                 id="call-notes"
                 rows={3}
-                className="input resize-none"
+                className="input mt-2 resize-none text-[14px]"
                 placeholder="Anything else the customer said"
                 value={draft.notes}
                 onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
@@ -251,20 +284,27 @@ export function CallAssistant({ lead, closeHref, readOnly }: { lead: CallLead; c
             </div>
           </div>
 
-          <div className="border-t border-line px-5 py-3">
-            <div className="mb-2.5 flex items-center justify-between text-xs">
-              <span className="text-muted tabular-nums">{totalAnswered} of 10 answered</span>
-              <SaveStatus readOnly={readOnly} savedAt={savedAt} />
+          <div className="border-t border-line bg-surface px-6 pt-3 pb-4">
+            <div className="mb-3 flex items-center gap-3 text-[12.5px]">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-subtle" aria-hidden>
+                <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(totalAnswered / total) * 100}%` }} />
+              </div>
+              <span className="text-muted tabular-nums">
+                {totalAnswered} of {total} answered
+              </span>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => finish(false)} className="btn-ghost flex-1">
+              <button type="button" onClick={() => finish(false)} className="btn-ghost h-11 flex-1 text-[14px]">
                 <PhoneOff className="size-4" />
                 Didn&apos;t connect
               </button>
-              <button type="button" onClick={() => finish(true)} className="btn flex-1">
+              <button type="button" onClick={() => finish(true)} className="btn h-11 flex-[1.4] text-[14px]">
                 <Check className="size-4" />
                 Finish call
               </button>
+            </div>
+            <div className="mt-2.5 text-center text-[12px]">
+              <SaveStatus readOnly={readOnly} savedAt={savedAt} />
             </div>
           </div>
         </>
@@ -272,45 +312,45 @@ export function CallAssistant({ lead, closeHref, readOnly }: { lead: CallLead; c
 
       {step === "finish" && (
         <>
-          <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-            <div>
-              <div className="label">How did the call go?</div>
-              <div className="grid grid-cols-2 gap-2">
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+              <div className="text-[15px] font-semibold">How did the call go?</div>
+              <p className="mt-0.5 text-[12.5px] text-muted">Pick what actually happened on the call.</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 {CALL_OUTCOMES.map((o) => (
                   <button
                     key={o.value}
                     type="button"
                     onClick={() => setOutcome(o.value)}
                     aria-pressed={outcome === o.value}
-                    className={`rounded-lg border px-3 py-2 text-left text-[13px] font-medium transition ${
-                      outcome === o.value ? "border-accent bg-accent-soft text-accent" : "border-line hover:bg-subtle"
+                    className={`flex min-h-11 items-center gap-2 rounded-xl border px-3.5 py-2 text-left text-[14px] font-medium transition ${
+                      outcome === o.value ? "border-accent bg-accent-soft text-accent ring-1 ring-accent" : "border-line hover:border-accent/40 hover:bg-subtle"
                     }`}
                   >
+                    <span className={`size-2 flex-none rounded-full ${o.conversation ? "bg-good" : "bg-faint"}`} />
                     {o.label}
                   </button>
                 ))}
               </div>
               {outcomeInfo && !outcomeInfo.conversation && totalAnswered > 0 && (
-                <p className="mt-2 text-xs text-muted">
+                <p className="mt-3 text-[12.5px] text-muted">
                   The call will be recorded as not connected. Your {totalAnswered} answers stay as a draft for the next call.
                 </p>
               )}
             </div>
-            <div>
-              <label htmlFor="follow-up-at" className="label">
+            <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+              <label htmlFor="follow-up-at" className="text-[15px] font-semibold">
                 Next follow-up
               </label>
-              <input id="follow-up-at" type="datetime-local" className="input" value={followUpAt} onChange={(e) => setFollowUpAt(e.target.value)} />
+              <input id="follow-up-at" type="datetime-local" className="input mt-2 h-10" value={followUpAt} onChange={(e) => setFollowUpAt(e.target.value)} />
             </div>
-            {outcomeInfo?.conversation && (
-              <Summary answers={draft.answers} />
-            )}
+            {outcomeInfo?.conversation && <Summary answers={draft.answers} />}
           </div>
-          <div className="flex gap-2 border-t border-line px-5 py-3">
-            <button type="button" onClick={() => setStep("questions")} className="btn-ghost flex-1">
+          <div className="flex gap-2 border-t border-line bg-surface px-6 py-4">
+            <button type="button" onClick={() => setStep("questions")} className="btn-ghost h-11 flex-1 text-[14px]">
               Back
             </button>
-            <button type="button" disabled={!outcome} onClick={confirmFinish} className="btn flex-1">
+            <button type="button" disabled={!outcome} onClick={confirmFinish} className="btn h-11 flex-[1.4] text-[14px]">
               {readOnly ? "Finish (preview)" : "Save call"}
             </button>
           </div>
@@ -318,17 +358,17 @@ export function CallAssistant({ lead, closeHref, readOnly }: { lead: CallLead; c
       )}
 
       {step === "done" && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
-          <span className="grid size-12 place-items-center rounded-full bg-good-soft text-good">
-            <Check className="size-6" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-10 text-center">
+          <span className="grid size-14 place-items-center rounded-full bg-good-soft text-good">
+            <Check className="size-7" />
           </span>
-          <div className="text-[15px] font-semibold">{outcomeInfo?.label ?? "Call finished"}</div>
-          <p className="text-sm text-muted">
+          <div className="text-[17px] font-semibold">{outcomeInfo?.label ?? "Call finished"}</div>
+          <p className="text-[14px] leading-relaxed text-muted">
             {readOnly
-              ? "This is the read-only preview, so nothing was saved. Once calling is switched on, this call, its answers and the follow-up go on the lead's history."
+              ? "This is the read-only preview, so nothing was saved. Once saving is switched on, this call, its answers and the follow-up go on the lead's history."
               : "Call finished."}
           </p>
-          <Link href={closeHref} scroll={false} className="btn mt-2">
+          <Link href={closeHref} scroll={false} className="btn mt-2 h-10 px-5">
             Close
           </Link>
         </div>
@@ -339,14 +379,14 @@ export function CallAssistant({ lead, closeHref, readOnly }: { lead: CallLead; c
 
 function SaveStatus({ readOnly, savedAt }: { readOnly: boolean; savedAt: number | null }) {
   if (readOnly) {
-    return <span className="text-muted">Preview: draft kept on this device only</span>;
+    return <span className="text-muted">Preview: answers stay on this device only, nothing is saved to the CRM</span>;
   }
   return savedAt ? (
-    <span className="flex items-center gap-1 text-good">
-      <Check className="size-3.5" /> Draft saved
+    <span className="inline-flex items-center gap-1 text-muted">
+      <Check className="size-3.5 text-good" /> Draft saved on this device
     </span>
   ) : (
-    <span className="text-muted">Not saved yet</span>
+    <span className="text-faint">Not saved yet</span>
   );
 }
 
@@ -356,10 +396,11 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`rounded-lg border px-2.5 py-1 text-[12.5px] font-medium transition ${
-        on ? "border-accent bg-accent text-white" : "border-line bg-surface text-ink hover:border-accent/40 hover:bg-accent-soft"
+      className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13.5px] font-medium transition ${
+        on ? "border-accent bg-accent text-white shadow-sm hover:bg-accent-hover" : "border-line bg-surface text-ink hover:border-accent/50 hover:bg-accent-soft"
       }`}
     >
+      {on && <Check className="-ml-0.5 size-3.5" />}
       {children}
     </button>
   );
@@ -374,71 +415,108 @@ function QuestionBlock({ n, q, answer, onChange }: { n: number; q: Question; ans
   function toggle(value: string) {
     const has = a.values.includes(value);
     const values = q.multi ? (has ? a.values.filter((v) => v !== value) : [...a.values, value]) : has ? [] : [value];
-    onChange({ ...a, values, skipped: false });
+    // A single-choice question has one answer: picking a listed option replaces a typed one.
+    const other = q.multi || has ? a.other : "";
+    if (!q.multi && !has) setShowOther(false);
+    onChange({ ...a, values, other, skipped: false });
+  }
+
+  function toggleOther() {
+    if (showOther) {
+      setShowOther(false);
+      onChange({ ...a, other: "" });
+    } else {
+      setShowOther(true);
+      if (!q.multi) onChange({ ...a, values: [], skipped: false });
+    }
   }
 
   const visibleFollowUps = (q.followUps ?? []).filter((f) => f.when.some((w) => a.values.includes(w)));
 
   return (
-    <div className={a.skipped ? "opacity-60" : ""}>
+    <div className={`px-4 py-4 ${a.skipped ? "bg-subtle/50" : ""}`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="text-[13.5px] font-medium leading-snug">
-          <span className="mr-1.5 text-muted tabular-nums">{n}.</span>
+        <div className={`text-[14.5px] leading-snug font-semibold ${a.skipped ? "text-muted" : ""}`}>
+          <span className="mr-1.5 font-medium text-faint tabular-nums">{n}.</span>
           {q.label}
-          {q.multi && <span className="ml-1.5 text-xs font-normal text-muted">pick any</span>}
         </div>
+        {q.multi && <span className="mt-0.5 flex-none rounded-full bg-subtle px-2 py-0.5 text-[11px] font-medium text-muted">Pick any</span>}
       </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {q.options.map((o) => (
-          <Chip key={o.value} on={a.values.includes(o.value)} onClick={() => toggle(o.value)}>
-            {o.label}
-          </Chip>
-        ))}
-        {q.allowOther && (
-          <Chip on={showOther} onClick={() => setShowOther((s) => !s)}>
-            Other
-          </Chip>
-        )}
-      </div>
-      {showOther && (
-        <input
-          aria-label={`${q.label} — other answer`}
-          className="input mt-2 h-8 text-[13px]"
-          placeholder="Type their answer"
-          value={a.other ?? ""}
-          onChange={(e) => onChange({ ...a, other: e.target.value, skipped: false })}
-        />
+      {!a.skipped && (
+        <>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {q.options.map((o) => (
+              <Chip key={o.value} on={a.values.includes(o.value)} onClick={() => toggle(o.value)}>
+                {o.label}
+              </Chip>
+            ))}
+            {q.allowOther && (
+              <Chip on={showOther} onClick={toggleOther}>
+                {!showOther && <Plus className="-ml-0.5 size-3.5" />}
+                Other
+              </Chip>
+            )}
+          </div>
+          {showOther && (
+            <input
+              autoFocus
+              aria-label={`${q.label} (other answer)`}
+              className="input mt-2.5 h-10 text-[14px]"
+              placeholder="Type what the customer said"
+              value={a.other ?? ""}
+              onChange={(e) => onChange({ ...a, other: e.target.value, skipped: false })}
+            />
+          )}
+          {visibleFollowUps.map((f) => (
+            <FollowUpField
+              key={f.key}
+              f={f}
+              value={a.extra?.[f.key] ?? ""}
+              other={a.extra?.[`${f.key}_other`] ?? ""}
+              onChange={(key, v) => onChange({ ...a, extra: { ...a.extra, [key]: v } })}
+            />
+          ))}
+        </>
       )}
-      {visibleFollowUps.map((f) => (
-        <FollowUpField key={f.key} f={f} value={a.extra?.[f.key] ?? ""} onChange={(v) => onChange({ ...a, extra: { ...a.extra, [f.key]: v } })} />
-      ))}
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-        <button type="button" onClick={() => setShowScript((s) => !s)} className="flex items-center gap-1 font-medium text-accent hover:underline" aria-expanded={showScript}>
+      <div className="mt-3 flex flex-wrap items-center gap-1 text-[12.5px]">
+        <button
+          type="button"
+          onClick={() => setShowScript((s) => !s)}
+          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium transition ${showScript ? "bg-accent-soft text-accent" : "text-accent hover:bg-accent-soft"}`}
+          aria-expanded={showScript}
+        >
           <MessageSquareText className="size-3.5" />
-          {showScript ? "Hide script" : "Suggested script"}
+          {showScript ? "Hide script" : "What to say"}
         </button>
-        <button type="button" onClick={() => setShowNote((s) => !s)} className="flex items-center gap-1 text-muted hover:text-ink">
+        <button
+          type="button"
+          onClick={() => setShowNote((s) => !s)}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted transition hover:bg-subtle hover:text-ink"
+        >
           <StickyNote className="size-3.5" />
           Note
         </button>
         <button
           type="button"
-          onClick={() => onChange({ ...a, values: [], other: "", skipped: !a.skipped })}
-          className="text-muted hover:text-ink"
+          onClick={() => {
+            setShowOther(false);
+            onChange({ ...a, values: [], other: "", skipped: !a.skipped });
+          }}
+          className="ml-auto rounded-md px-2 py-1 text-muted transition hover:bg-subtle hover:text-ink"
           aria-pressed={!!a.skipped}
         >
-          {a.skipped ? "Not discussed ✓" : "Skip"}
+          {a.skipped ? "Not discussed · Undo" : "Skip"}
         </button>
       </div>
       {showScript && (
-        <blockquote className="mt-2 rounded-lg border-l-2 border-accent bg-accent-soft/60 px-3 py-2 text-[12.5px] leading-relaxed text-ink">
+        <blockquote className="mt-2 rounded-xl border-l-[3px] border-accent bg-accent-soft/70 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-ink">
           “{q.script}”
         </blockquote>
       )}
       {showNote && (
         <input
-          aria-label={`${q.label} — note`}
-          className="input mt-2 h-8 text-[13px]"
+          aria-label={`${q.label} (note)`}
+          className="input mt-2 h-10 text-[14px]"
           placeholder="Note on this answer"
           value={a.note ?? ""}
           onChange={(e) => onChange({ ...a, note: e.target.value })}
@@ -448,20 +526,42 @@ function QuestionBlock({ n, q, answer, onChange }: { n: number; q: Question; ans
   );
 }
 
-function FollowUpField({ f, value, onChange }: { f: FollowUpQuestion; value: string; onChange: (v: string) => void }) {
+function FollowUpField({
+  f,
+  value,
+  other,
+  onChange,
+}: {
+  f: FollowUpQuestion;
+  value: string;
+  other: string;
+  onChange: (key: string, v: string) => void;
+}) {
   return (
-    <div className="mt-2.5 rounded-lg bg-subtle px-3 py-2.5">
-      <div className="mb-1.5 text-xs font-medium text-muted">{f.label}</div>
+    <div className="mt-3 rounded-xl border border-line bg-subtle/70 px-3.5 py-3">
+      <div className="mb-2 text-[13px] font-semibold text-ink">{f.label}</div>
       {f.kind === "datetime" ? (
-        <input type="datetime-local" aria-label={f.label} className="input h-8 text-[13px]" value={value} onChange={(e) => onChange(e.target.value)} />
+        <input type="datetime-local" aria-label={f.label} className="input h-10 text-[14px]" value={value} onChange={(e) => onChange(f.key, e.target.value)} />
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {f.options!.map((o) => (
-            <Chip key={o.value} on={value === o.value} onClick={() => onChange(value === o.value ? "" : o.value)}>
-              {o.label}
-            </Chip>
-          ))}
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2">
+            {f.options!.map((o) => (
+              <Chip key={o.value} on={value === o.value} onClick={() => onChange(f.key, value === o.value ? "" : o.value)}>
+                {o.label}
+              </Chip>
+            ))}
+          </div>
+          {value === "other" && (
+            <input
+              autoFocus
+              aria-label={`${f.label} (other)`}
+              className="input mt-2.5 h-10 text-[14px]"
+              placeholder="Type the reason"
+              value={other}
+              onChange={(e) => onChange(`${f.key}_other`, e.target.value)}
+            />
+          )}
+        </>
       )}
     </div>
   );
@@ -478,18 +578,21 @@ function Summary({ answers }: { answers: Record<string, Answer> }) {
         return { q: q.label, v: a.skipped ? "Not discussed" : labels.join(", ") };
       }),
   );
-  if (rows.length === 0) return <p className="text-sm text-muted">No answers recorded on this call.</p>;
   return (
-    <div>
-      <div className="label">Summary</div>
-      <dl className="divide-y divide-line rounded-xl border border-line text-[13px]">
-        {rows.map((r) => (
-          <div key={r.q} className="grid grid-cols-[1fr_auto] gap-3 px-3 py-2">
-            <dt className="text-muted">{r.q}</dt>
-            <dd className="text-right font-medium">{r.v}</dd>
-          </div>
-        ))}
-      </dl>
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+      <div className="text-[15px] font-semibold">Summary</div>
+      {rows.length === 0 ? (
+        <p className="mt-1 text-[13px] text-muted">No answers recorded on this call.</p>
+      ) : (
+        <dl className="mt-2 divide-y divide-line text-[13.5px]">
+          {rows.map((r) => (
+            <div key={r.q} className="grid grid-cols-[1fr_auto] gap-4 py-2">
+              <dt className="text-muted">{r.q}</dt>
+              <dd className="max-w-[55%] text-right font-medium">{r.v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }
