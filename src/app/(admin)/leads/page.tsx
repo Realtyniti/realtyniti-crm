@@ -360,7 +360,7 @@ function LeadRow({
         </div>
       </td>
       <td className="px-4 py-3">
-        {req ? <span className="whitespace-nowrap text-ink">{req}</span> : <span className="text-faint">Not asked yet</span>}
+        {req ? <span className="block max-w-[240px] truncate text-ink" title={req}>{req}</span> : <span className="text-faint">Not asked yet</span>}
         <div className="text-[12px] text-muted">{SOURCE_LABEL[l.first_source]}{l.needs_chetan && <span className="ml-1.5 font-medium text-hot">· needs attention</span>}</div>
       </td>
       <td className={`px-4 py-3 whitespace-nowrap tabular-nums ${cols.budget}`}>
