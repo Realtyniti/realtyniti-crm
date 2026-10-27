@@ -25,27 +25,27 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">Channel board</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Channel board</h1>
         <div className="ml-auto flex gap-2">
           {(["week", "month"] as const).map((x) => (
             <Link
               key={x}
               href={`/channels?p=${x}`}
-              className={`rounded-full px-3 py-1 text-sm ring-1 ${x === period ? "bg-stone-900 text-white ring-stone-900" : "bg-white ring-stone-200"}`}
+              className={`rounded-full px-3 py-1 text-sm ring-1 ${x === period ? "bg-accent text-white ring-accent" : "bg-white ring-line"}`}
             >
               This {x}
             </Link>
           ))}
         </div>
       </div>
-      <p className="max-w-3xl text-sm text-stone-600">
+      <p className="max-w-3xl text-sm text-muted">
         What each channel produced up to the first qualified conversation. Cost per qualified lead and per site visit
         appear once you enter that month&apos;s spend. This board only shows; budget decisions stay with you.
       </p>
 
-      <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-line bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+          <thead className="bg-subtle text-left text-xs uppercase tracking-wide text-muted">
             <tr>
               <th className="px-3 py-2">Channel</th>
               <th className="px-3 py-2 text-right">Enquiries</th>
@@ -62,10 +62,10 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100 tabular-nums">
+          <tbody className="divide-y divide-line tabular-nums">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-4 text-stone-500">
+                <td colSpan={9} className="px-3 py-4 text-muted">
                   No enquiries this {period} yet.
                 </td>
               </tr>
@@ -88,7 +88,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
               </tr>
             ))}
             {rows.length > 0 && (
-              <tr className="bg-stone-50 font-medium">
+              <tr className="bg-subtle font-medium">
                 <td className="px-3 py-2">Total</td>
                 <td className="px-3 py-2 text-right">{total.e}</td>
                 <td className="px-3 py-2 text-right">{total.q}</td>

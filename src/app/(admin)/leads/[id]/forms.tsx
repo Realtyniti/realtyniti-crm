@@ -28,8 +28,8 @@ export function EditLeadForm({ lead }: { lead: Lead }) {
         <button className="btn" disabled={pending}>
           {pending ? "Saving…" : "Save and re-tag"}
         </button>
-        {state.ok && <span className="text-sm text-green-700">{state.ok}</span>}
-        {state.error && <span className="text-sm text-red-700">{state.error}</span>}
+        {state.ok && <span className="text-sm text-good">{state.ok}</span>}
+        {state.error && <span className="text-sm text-hot">{state.error}</span>}
       </div>
     </form>
   );
@@ -62,8 +62,8 @@ export function CloseLeadForm({ lead }: { lead: Lead }) {
       <button className="btn-ghost" disabled={pending}>
         Close lead
       </button>
-      {state.ok && <p className="text-sm text-green-700">{state.ok}</p>}
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {state.ok && <p className="text-sm text-good">{state.ok}</p>}
+      {state.error && <p className="text-sm text-hot">{state.error}</p>}
     </form>
   );
 }

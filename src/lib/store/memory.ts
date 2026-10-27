@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DEFAULT_TEMPLATES } from "../templates";
 import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
+import { compareLeads, matchesQuery, matchesView, type LeadQuery, type LeadView } from "../lead-views";
 import type { LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
 
 /** In-process store. Data is lost on restart; used for local demo and tests. */
@@ -33,6 +34,27 @@ export class MemoryStore implements Store {
       .filter((l) => !filter.status || l.status === filter.status)
       .filter((l) => filter.needsChetan === undefined || l.needs_chetan === filter.needsChetan)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  async queryLeads(query: LeadQuery) {
+    const size = query.pageSize ?? 25;
+    const page = Math.max(1, query.page ?? 1);
+    const all = [...this.leads.values()].filter((l) => matchesQuery(l, query)).sort(compareLeads(query.sort));
+    return { rows: all.slice((page - 1) * size, page * size), total: all.length };
+  }
+
+  async countLeads(views: readonly LeadView[]) {
+    const leads = [...this.leads.values()];
+    return Object.fromEntries(views.map((v) => [v, leads.filter((l) => matchesView(l, v)).length])) as Record<LeadView, number>;
+  }
+
+  async firstTouchAt(leadIds: string[]) {
+    const out: Record<string, string> = {};
+    for (const t of this.touches) {
+      if (!leadIds.includes(t.lead_id)) continue;
+      if (!out[t.lead_id] || t.received_at < out[t.lead_id]) out[t.lead_id] = t.received_at;
+    }
+    return out;
   }
 
   async insertLead(lead: NewLead) {

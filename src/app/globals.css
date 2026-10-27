@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * RealtyNiti design tokens. Every colour on every screen comes from here:
+ * deep navy navigation, white cards on an off-white ground, one blue accent,
+ * green only for WhatsApp, and fixed colours for lead temperature.
+ */
 :root {
-  --background: #f7f7f5;
-  --foreground: #1c1c1a;
+  --background: #f5f6fa;
+  --foreground: #0f1729;
 }
 
 @theme inline {
@@ -10,6 +15,39 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-ground: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-subtle: #f0f2f7;
+  --color-line: #e3e6ee;
+  --color-ink: #0f1729;
+  --color-muted: #5d6880;
+  --color-faint: #8a93a8;
+
+  --color-navy: #0d1a36;
+  --color-navy-2: #16264a;
+  --color-navy-fg: #c3cde4;
+
+  --color-accent: #2557e6;
+  --color-accent-hover: #1d47c4;
+  --color-accent-soft: #eaf0fe;
+  --color-wa: #14a44d;
+  --color-wa-hover: #0f8a40;
+  --color-wa-soft: #e7f7ee;
+
+  --color-hot: #c8322a;
+  --color-hot-soft: #fdeeec;
+  --color-warm: #b0670a;
+  --color-warm-soft: #fdf4e4;
+  --color-cold: #3466ad;
+  --color-cold-soft: #ebf2fb;
+  --color-new: #6b4fd8;
+  --color-new-soft: #f0ecfd;
+  --color-good: #15803d;
+  --color-good-soft: #e8f6ed;
+
+  --shadow-card: 0 1px 2px rgb(15 23 41 / 0.04), 0 1px 3px rgb(15 23 41 / 0.06);
+  --shadow-lift: 0 10px 30px rgb(15 23 41 / 0.12), 0 2px 6px rgb(15 23 41 / 0.06);
 }
 
 body {
@@ -17,18 +55,41 @@ body {
   color: var(--foreground);
 }
 
-.input {
-  @apply w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-500;
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
-.btn {
-  @apply inline-flex items-center justify-center rounded-md bg-stone-900 px-3 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50;
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
-.btn-ghost {
-  @apply inline-flex items-center justify-center rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-100;
-}
-.label {
-  @apply mb-1 block text-xs font-medium uppercase tracking-wide text-stone-500;
-}
-.panel {
-  @apply rounded-lg border border-stone-200 bg-white p-4;
+
+/* Shared form and layout pieces, used by every screen (old and new). In the components layer so utilities can override them. */
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent/15;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-accent-hover disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium text-ink transition hover:bg-subtle disabled:opacity-50;
+  }
+  .btn-wa {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-wa px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-wa-hover;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium tracking-wide text-muted uppercase;
+  }
+  .panel {
+    @apply rounded-2xl border border-line bg-surface p-5 shadow-card;
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold tracking-[0.08em] text-muted uppercase;
+  }
 }

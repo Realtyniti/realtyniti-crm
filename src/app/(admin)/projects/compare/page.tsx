@@ -13,12 +13,12 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <Link href="/projects" className="text-sm text-stone-500 hover:underline">
+      <Link href="/projects" className="text-sm text-muted hover:underline">
         ← All projects
       </Link>
-      <h1 className="text-xl font-semibold">Comparison note (draft)</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Comparison note (draft)</h1>
       {!note ? (
-        <p className="panel text-sm text-stone-600">Tick two or three projects on the Projects page.</p>
+        <p className="panel text-sm text-muted">Tick two or three projects on the Projects page.</p>
       ) : (
         <section className="panel space-y-3 text-sm">
           {stale.length > 0 && (
@@ -26,7 +26,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
               Not recently confirmed: {stale.map((p) => p.name).join(", ")}. Re-confirm before sharing figures.
             </p>
           )}
-          <pre className="whitespace-pre-wrap rounded bg-stone-50 p-3 font-sans">{note}</pre>
+          <pre className="whitespace-pre-wrap rounded bg-subtle p-3 font-sans">{note}</pre>
           <CopyButton text={note} label="Copy" />
         </section>
       )}

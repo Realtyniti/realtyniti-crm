@@ -1,3 +1,4 @@
+import type { LeadPage, LeadQuery, LeadView } from "../lead-views";
 import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
 
 export type NewLead = Omit<Lead, "id" | "created_at" | "updated_at">;
@@ -14,6 +15,11 @@ export interface Store {
   findLeadByPhone(phone: string): Promise<Lead | null>;
   getLead(id: string): Promise<Lead | null>;
   listLeads(filter?: LeadFilter): Promise<Lead[]>;
+  /** One page of the Leads screen, filtered and sorted by the database. */
+  queryLeads(query: LeadQuery): Promise<LeadPage>;
+  countLeads(views: readonly LeadView[]): Promise<Record<LeadView, number>>;
+  /** When each lead first enquired (earliest touch), which can be earlier than the card's created_at for imports. */
+  firstTouchAt(leadIds: string[]): Promise<Record<string, string>>;
   insertLead(lead: NewLead): Promise<Lead>;
   updateLead(id: string, patch: LeadPatch): Promise<Lead>;
 

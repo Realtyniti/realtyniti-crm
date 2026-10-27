@@ -59,7 +59,7 @@ export function ProjectForm({ project }: { project?: Project }) {
         <label className="label">Notes</label>
         <textarea name="notes" rows={2} className="input" defaultValue={p?.notes ?? ""} />
       </div>
-      <div className="flex flex-wrap items-center gap-3 rounded-md bg-stone-50 p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3 rounded-md bg-subtle p-3 text-sm">
         <label className="flex items-center gap-2">
           <input type="checkbox" name="confirmed_today" />
           These figures were confirmed by the developer today
