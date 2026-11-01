@@ -10,6 +10,7 @@ import {
   ChevronsRight,
   FileText,
   LayoutDashboard,
+  MessageCircle,
   Menu,
   Radio,
   Search,
@@ -46,7 +47,13 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   { label: "Insights", items: [{ href: "/channels", label: "Channels", icon: Radio }] },
-  { label: "Settings", items: [{ href: "/templates", label: "Templates", icon: FileText }] },
+  {
+    label: "Settings",
+    items: [
+      { href: "/templates", label: "Templates", icon: FileText },
+      { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
+    ],
+  },
 ];
 
 function isActive(path: string, item: NavItem) {

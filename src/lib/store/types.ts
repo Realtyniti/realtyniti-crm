@@ -1,5 +1,5 @@
 import type { LeadPage, LeadQuery, LeadView } from "../lead-views";
-import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
+import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, NewWaMessage, Project, ProjectInput, SiteVisit, VisitSlot, WaMessage, WhatsAppSettings } from "../types";
 
 export type NewLead = Omit<Lead, "id" | "created_at" | "updated_at">;
 export type LeadPatch = Partial<Omit<Lead, "id" | "created_at" | "updated_at">>;
@@ -55,6 +55,17 @@ export interface Store {
 
   listSpend(): Promise<ChannelSpend[]>;
   upsertSpend(s: ChannelSpend): Promise<ChannelSpend>;
+
+  /** WhatsApp message log. addWaMessage returns null when the wamid or client_ref is already stored (duplicate). */
+  addWaMessage(m: NewWaMessage): Promise<WaMessage | null>;
+  findWaMessage(by: { wamid?: string; clientRef?: string }): Promise<WaMessage | null>;
+  updateWaMessage(id: string, patch: Partial<Pick<WaMessage, "status" | "error" | "wamid" | "lead_id">>): Promise<WaMessage>;
+  listWaMessages(leadId: string): Promise<WaMessage[]>;
+  /** Lead ids (of those given) that have at least one outbound WhatsApp message Meta accepted (sent, delivered or read). */
+  leadsContactedOnWhatsApp(leadIds: string[]): Promise<Set<string>>;
+
+  getWhatsAppSettings(): Promise<WhatsAppSettings>;
+  updateWhatsAppSettings(patch: Partial<Omit<WhatsAppSettings, "updated_at">>): Promise<WhatsAppSettings>;
 }
 
 export interface VisitFilter {

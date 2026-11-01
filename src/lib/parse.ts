@@ -71,6 +71,8 @@ const MARKETS: { name: string; re: RegExp }[] = [
   { name: "Greater Noida West", re: /greater\s*noida\s*west|noida\s*extension|gnw|gaur\s*city/i },
   { name: "Greater Noida", re: /greater\s*noida|gr\.?\s*noida|pari\s*chowk/i },
   { name: "Noida", re: /noida|sector\s*\d+/i },
+  { name: "Ghaziabad", re: /ghaziabad|indirapuram|raj\s*nagar|vaishali/i },
+  { name: "Delhi NCR", re: /\bdelhi\b|\bncr\b/i },
 ];
 
 /** Keeps the sector if one was given, e.g. "Noida, Sector 150". */
