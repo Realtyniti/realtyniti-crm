@@ -89,6 +89,8 @@ export async function captureLead(store: Store, input: LeadInput, now = new Date
       brand: input.brand?.trim() || DEFAULT_BRAND,
       followups_unanswered: 0,
       last_followup_at: null,
+      // Only live enquiries may get automatic WhatsApp messages; imports, backfills and hand-added leads wait for Chetan's OK.
+      wa_auto_allowed: input.autoWhatsApp ?? false,
     });
     created = true;
   } else {

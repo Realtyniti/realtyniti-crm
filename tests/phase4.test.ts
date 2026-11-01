@@ -22,8 +22,20 @@ beforeEach(async () => {
   for (const t of await store.listTemplates()) await saveTemplate(store, t.key, t.body, true);
 });
 
-async function dueLead(opts: { inboundHoursAgo?: number } = {}) {
-  const { lead } = await captureLead(store, { source: "meta", phone: BUYER, name: "Ravi", micro_market: "Noida", budget_max_inr: 5e6, timeline_months: 4 });
+/** A WhatsApp message to the lead that Meta accepted: the lead has been contacted. */
+async function contacted(leadId: string, phone = BUYER) {
+  await store.addWaMessage({
+    lead_id: leadId, wamid: `wamid.out.${leadId}`, direction: "out", phone, kind: "text", body: "Hi", template_name: null,
+    status: "sent", error: null, actor: "bot", automated: true, client_ref: null,
+  });
+}
+
+async function dueLead(opts: { inboundHoursAgo?: number; contacted?: boolean; allowed?: boolean } = {}) {
+  const { lead } = await captureLead(store, {
+    source: "meta", phone: BUYER, name: "Ravi", micro_market: "Noida", budget_max_inr: 5e6, timeline_months: 4,
+    autoWhatsApp: opts.allowed ?? true,
+  });
+  if (opts.contacted ?? true) await contacted(lead.id);
   return store.updateLead(lead.id, {
     next_follow_up_at: new Date(NOON.getTime() - 3600_000).toISOString(),
     last_inbound_at: opts.inboundHoursAgo != null ? new Date(NOON.getTime() - opts.inboundHoursAgo * 3600_000).toISOString() : null,
@@ -61,6 +73,58 @@ describe("Follow-up Clock", () => {
     const r = await runFollowUpClock(store, cfg, NOON);
     expect(r).toMatchObject({ sent: 0, flagged: 1 });
     expect((await store.getLead(lead.id))!.needs_chetan_reason).toMatch(/Gone quiet/);
+  });
+
+  it("never messages a lead that existed before go-live (not allowed), even when due and contacted", async () => {
+    await dueLead({ inboundHoursAgo: 5, allowed: false });
+    cfg.followupTemplate = { name: "realtyniti_followup", language: "en" };
+    expect(await runFollowUpClock(store, cfg, NOON)).toMatchObject({ sent: 0, leftForChetan: 1 });
+    expect(sender.sent).toHaveLength(0);
+  });
+
+  it("never messages a lead we have not contacted on WhatsApp before", async () => {
+    await dueLead({ contacted: false });
+    cfg.followupTemplate = { name: "realtyniti_followup", language: "en" };
+    expect(await runFollowUpClock(store, cfg, NOON)).toMatchObject({ sent: 0, leftForChetan: 1 });
+    expect(sender.sent).toHaveLength(0);
+  });
+
+  it("dry runs and blocked attempts do not count as contact", async () => {
+    const lead = await dueLead({ contacted: false });
+    for (const status of ["dry_run", "blocked", "failed"] as const) {
+      await store.addWaMessage({
+        lead_id: lead.id, wamid: null, direction: "out", phone: BUYER, kind: "text", body: "Hi", template_name: null,
+        status, error: null, actor: "bot", automated: true, client_ref: null,
+      });
+    }
+    cfg.followupTemplate = { name: "realtyniti_followup", language: "en" };
+    expect((await runFollowUpClock(store, cfg, NOON)).sent).toBe(0);
+  });
+
+  it("needs Chetan's approval of the CRM follow-up template, even for the Meta template path", async () => {
+    await dueLead();
+    await saveTemplate(store, "followup.cold", (await store.getTemplate("followup.cold"))!.body, false);
+    await saveTemplate(store, "followup.warm", (await store.getTemplate("followup.warm"))!.body + " ", false);
+    cfg.followupTemplate = { name: "realtyniti_followup", language: "en" };
+    expect(await runFollowUpClock(store, cfg, NOON)).toMatchObject({ sent: 0, leftForChetan: 1 });
+  });
+
+  it("with credentials set but the switches off, the 94-lead backlog receives nothing", async () => {
+    const { GatedSender } = await import("@/lib/wa-gate");
+    const inner = new DryRunSender();
+    const gated = { ...cfg, sender: new GatedSender(inner, store, { chetanPhone: "+919999988888" }), followupTemplate: { name: "realtyniti_followup", language: "en" } };
+    // 94 leads that existed before go-live: imported, never allowed, never contacted, all overdue.
+    for (let i = 0; i < 94; i++) {
+      const { lead } = await captureLead(store, { source: "meta", phone: `+9190000${String(i).padStart(5, "0")}`, name: `Lead ${i}` });
+      await store.updateLead(lead.id, { next_follow_up_at: new Date(NOON.getTime() - 86_400_000).toISOString() });
+    }
+    const r = await runFollowUpClock(store, gated, NOON);
+    expect(r).toMatchObject({ sent: 0, flagged: 0, leftForChetan: 94 });
+    expect(inner.sent).toHaveLength(0);
+    // Even with every switch on, they stay excluded until Chetan allows each one.
+    await store.updateWhatsAppSettings({ outbound_enabled: true, automation_enabled: true, test_mode: false });
+    expect((await runFollowUpClock(store, gated, NOON)).sent).toBe(0);
+    expect(inner.sent).toHaveLength(0);
   });
 
   it("never follows up once money has come up", async () => {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DEFAULT_TEMPLATES } from "../templates";
-import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
+import { SAFE_WHATSAPP_SETTINGS, type ChannelSpend, type Lead, type LeadEvent, type LeadTouch, type MessageTemplate, type NewWaMessage, type Project, type ProjectInput, type SiteVisit, type VisitSlot, type WaMessage, type WhatsAppSettings } from "../types";
 import { compareLeads, matchesQuery, matchesView, type LeadQuery, type LeadView } from "../lead-views";
 import type { LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
 
@@ -14,6 +14,8 @@ export class MemoryStore implements Store {
   private visits = new Map<string, SiteVisit>();
   private projects = new Map<string, Project>();
   private spend = new Map<string, ChannelSpend>();
+  private waMessages: WaMessage[] = [];
+  private waSettings: WhatsAppSettings = { ...SAFE_WHATSAPP_SETTINGS };
 
   constructor() {
     const now = new Date().toISOString();
@@ -215,6 +217,50 @@ export class MemoryStore implements Store {
     this.spend.set(`${s.source}|${s.month}`, s);
     return s;
   }
+  async addWaMessage(m: NewWaMessage) {
+    if (m.wamid && this.waMessages.some((x) => x.wamid === m.wamid)) return null;
+    if (m.client_ref && this.waMessages.some((x) => x.client_ref === m.client_ref)) return null;
+    const now = new Date().toISOString();
+    const row: WaMessage = { ...m, id: randomUUID(), created_at: m.created_at ?? now, status_at: now };
+    this.waMessages.push(row);
+    return row;
+  }
+
+  async findWaMessage(by: { wamid?: string; clientRef?: string }) {
+    return (
+      this.waMessages.find((m) => (by.wamid && m.wamid === by.wamid) || (by.clientRef && m.client_ref === by.clientRef)) ?? null
+    );
+  }
+
+  async updateWaMessage(id: string, patch: Partial<Pick<WaMessage, "status" | "error" | "wamid" | "lead_id">>) {
+    const i = this.waMessages.findIndex((m) => m.id === id);
+    if (i < 0) throw new Error(`wa message ${id} not found`);
+    this.waMessages[i] = { ...this.waMessages[i], ...patch, status_at: new Date().toISOString() };
+    return this.waMessages[i];
+  }
+
+  async listWaMessages(leadId: string) {
+    return this.waMessages.filter((m) => m.lead_id === leadId).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+
+  async leadsContactedOnWhatsApp(leadIds: string[]) {
+    const wanted = new Set(leadIds);
+    return new Set(
+      this.waMessages
+        .filter((m) => m.direction === "out" && m.lead_id && wanted.has(m.lead_id) && ["sent", "delivered", "read"].includes(m.status))
+        .map((m) => m.lead_id!),
+    );
+  }
+
+  async getWhatsAppSettings() {
+    return { ...this.waSettings, test_numbers: [...this.waSettings.test_numbers] };
+  }
+
+  async updateWhatsAppSettings(patch: Partial<Omit<WhatsAppSettings, "updated_at">>) {
+    this.waSettings = { ...this.waSettings, ...patch, updated_at: new Date().toISOString() };
+    return this.getWhatsAppSettings();
+  }
+
 }
 
 /** Mirrors the database's lost_needs_reason constraint. */

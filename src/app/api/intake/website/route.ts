@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
   try {
     const store = getStore();
-    const result = await captureLead(store, websiteFormToLead(parsed.data));
+    const result = await captureLead(store, { ...websiteFormToLead(parsed.data), autoWhatsApp: true });
     if (result.created) await greetNewLead(store, catcherConfig(), result.lead);
     return NextResponse.json({ id: result.lead.id, created: result.created }, { status: result.created ? 201 : 200 });
   } catch (e) {

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
+import { SAFE_WHATSAPP_SETTINGS, type ChannelSpend, type Lead, type LeadEvent, type LeadTouch, type MessageTemplate, type NewWaMessage, type Project, type ProjectInput, type SiteVisit, type VisitSlot, type WaMessage, type WhatsAppSettings } from "../types";
 import { cleanSearch, viewWindow, type LeadQuery, type LeadView } from "../lead-views";
 import type { LeadFacts, LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
 
@@ -177,6 +177,61 @@ export class SupabaseStore implements Store {
       await this.db.from("channel_spend").upsert({ ...s, updated_at: new Date().toISOString() }).select("source, month, amount_inr").single(),
     );
   }
+  async addWaMessage(m: NewWaMessage) {
+    const { data, error } = await this.db.from("wa_messages").insert(m).select().single();
+    // 23505 = unique violation on wamid or client_ref: the same message arrived (or was submitted) twice.
+    if (error?.code === "23505") return null;
+    if (error) throw new Error(error.message);
+    return data as WaMessage;
+  }
+
+  async findWaMessage(by: { wamid?: string; clientRef?: string }) {
+    if (!by.wamid && !by.clientRef) return null;
+    let q = this.db.from("wa_messages").select("*");
+    q = by.wamid ? q.eq("wamid", by.wamid) : q.eq("client_ref", by.clientRef!);
+    return one<WaMessage>(await q.maybeSingle());
+  }
+
+  async updateWaMessage(id: string, patch: Partial<Pick<WaMessage, "status" | "error" | "wamid" | "lead_id">>) {
+    return must<WaMessage>(
+      await this.db.from("wa_messages").update({ ...patch, status_at: new Date().toISOString() }).eq("id", id).select().single(),
+    );
+  }
+
+  async listWaMessages(leadId: string) {
+    return many<WaMessage>(await this.db.from("wa_messages").select("*").eq("lead_id", leadId).order("created_at").limit(500));
+  }
+
+  async leadsContactedOnWhatsApp(leadIds: string[]) {
+    if (!leadIds.length) return new Set<string>();
+    const rows = many<{ lead_id: string }>(
+      await this.db
+        .from("wa_messages")
+        .select("lead_id")
+        .eq("direction", "out")
+        .in("status", ["sent", "delivered", "read"])
+        .in("lead_id", leadIds),
+    );
+    return new Set(rows.map((r) => r.lead_id));
+  }
+
+  async getWhatsAppSettings() {
+    const row = one<WhatsAppSettings>(await this.db.from("whatsapp_settings").select("*").eq("id", true).maybeSingle());
+    // No row (migration not run yet) means the safe defaults: nothing leaves.
+    return row ? { ...SAFE_WHATSAPP_SETTINGS, ...row } : { ...SAFE_WHATSAPP_SETTINGS };
+  }
+
+  async updateWhatsAppSettings(patch: Partial<Omit<WhatsAppSettings, "updated_at">>) {
+    const row = must<WhatsAppSettings>(
+      await this.db
+        .from("whatsapp_settings")
+        .upsert({ id: true, ...patch, updated_at: new Date().toISOString() })
+        .select()
+        .single(),
+    );
+    return { ...SAFE_WHATSAPP_SETTINGS, ...row };
+  }
+
 }
 
 // The query builder's generic type is unwieldy; these are the filter methods the views use.

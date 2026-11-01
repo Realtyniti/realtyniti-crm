@@ -6,7 +6,7 @@ import type { Store } from "./store/types";
 import { DEFAULT_BRAND, firstReplyKey, renderForSending, TemplateError } from "./templates";
 import { formatBudget } from "./format";
 import type { Lead, Requirement } from "./types";
-import { windowOpen, type InboundMessage, type WhatsAppSender } from "./whatsapp";
+import { windowOpen, type InboundMessage, type SendResult, type WhatsAppSender } from "./whatsapp";
 
 /*
  * Realtyniti Lead Catcher (SYS-02). Greets every new enquiry, asks the five
@@ -26,6 +26,30 @@ export interface CatcherConfig {
   followupTemplate?: { name: string; language: string } | null;
   /** Site Visit Booker link for a lead, when bookings are set up. */
   bookingUrl?: (leadId: string) => string | null;
+  /**
+   * Whether the bot may message this lead on its own: global switches plus Chetan's
+   * per-lead OK (see wa-gate.ts). Absent means yes, which only tests rely on.
+   */
+  canAutomate?: (lead: Lead) => Promise<boolean>;
+}
+
+/** Writes what happened to an outgoing message on the card. Returns true when it went out. */
+async function recordSend(store: Store, lead: Lead, r: SendResult, what: string): Promise<boolean> {
+  if (r.status === "blocked") {
+    await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `Not sent: ${r.error ?? "blocked"} (${what.slice(0, 80)})` });
+    return false;
+  }
+  if (r.status === "failed") {
+    await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `WhatsApp message failed: ${r.error ?? "unknown error"}` });
+    return false;
+  }
+  await store.addEvent({
+    lead_id: lead.id,
+    kind: "message_out",
+    channel: "whatsapp",
+    body: r.status === "sent" ? what : `[dry run, WhatsApp not connected] ${what}`,
+  });
+  return true;
 }
 
 const SITE_VISIT = "site_visit";
@@ -84,13 +108,8 @@ export async function sendApproved(
     await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `Not sent: ${e.message}` });
     return false;
   }
-  await cfg.sender.sendText(lead.phone, text);
-  await store.addEvent({
-    lead_id: lead.id,
-    kind: "message_out",
-    channel: "whatsapp",
-    body: cfg.sender.live ? text : `[dry run, WhatsApp not connected] ${text}`,
-  });
+  const r = await cfg.sender.sendText(lead.phone, text, { leadId: lead.id, automated: true, actor: "bot" });
+  if (!(await recordSend(store, lead, r, text))) return false;
   if (!lead.first_reply_at) await store.updateLead(lead.id, { first_reply_at: new Date().toISOString() });
   return true;
 }
@@ -111,17 +130,12 @@ export async function alertChetan(store: Store, cfg: CatcherConfig, lead: Lead, 
     await store.addEvent({ lead_id: lead.id, kind: "flag", channel: null, body: `Alert not sent (CHETAN_WHATSAPP not set): ${line}` });
     return;
   }
-  if (cfg.alertTemplate) {
-    await cfg.sender.sendTemplate(cfg.chetanPhone, { ...cfg.alertTemplate, params: [line] });
-  } else {
-    await cfg.sender.sendText(cfg.chetanPhone, line);
-  }
-  await store.addEvent({
-    lead_id: lead.id,
-    kind: "note",
-    channel: null,
-    body: `${cfg.sender.live ? "" : "[dry run] "}Alert to Chetan: ${line}`,
-  });
+  const ctx = { automated: true, actor: "system" as const };
+  const r = cfg.alertTemplate
+    ? await cfg.sender.sendTemplate(cfg.chetanPhone, { ...cfg.alertTemplate, params: [line] }, ctx)
+    : await cfg.sender.sendText(cfg.chetanPhone, line, ctx);
+  const prefix = r.status === "sent" ? "" : r.status === "dry_run" ? "[dry run] " : `[not sent: ${r.error ?? r.status}] `;
+  await store.addEvent({ lead_id: lead.id, kind: "note", channel: null, body: `${prefix}Alert to Chetan: ${line}` });
 }
 
 function nextStep(lead: Lead): Step | null {
@@ -173,6 +187,15 @@ async function advance(store: Store, cfg: CatcherConfig, lead: Lead): Promise<Le
  * once the buyer replies.
  */
 export async function greetNewLead(store: Store, cfg: CatcherConfig, lead: Lead, now = new Date()): Promise<void> {
+  if (cfg.canAutomate && !(await cfg.canAutomate(lead))) {
+    await store.addEvent({
+      lead_id: lead.id,
+      kind: "note",
+      channel: "whatsapp",
+      body: "No automatic WhatsApp sent: automatic messages are switched off or not allowed for this lead. Call or message them yourself.",
+    });
+    return;
+  }
   if (lead.needs_chetan) {
     await alertChetan(store, cfg, lead, `💬 ${lead.name ?? lead.phone} asked about money in their enquiry: ${lead.needs_chetan_reason}`);
     return;
@@ -190,14 +213,14 @@ export async function greetNewLead(store: Store, cfg: CatcherConfig, lead: Lead,
     });
     return;
   }
-  await cfg.sender.sendTemplate(lead.phone, { ...cfg.openerTemplate, params: [lead.name?.split(" ")[0] ?? "there", lead.brand] });
-  await store.addEvent({
-    lead_id: lead.id,
-    kind: "message_out",
-    channel: "whatsapp",
-    body: `${cfg.sender.live ? "" : "[dry run] "}Sent WhatsApp opener (${cfg.openerTemplate.name}).`,
-  });
-  await store.updateLead(lead.id, { first_reply_at: now.toISOString() });
+  const r = await cfg.sender.sendTemplate(
+    lead.phone,
+    { ...cfg.openerTemplate, params: [lead.name?.split(" ")[0] ?? "there", lead.brand] },
+    { leadId: lead.id, automated: true, actor: "bot" },
+  );
+  if (await recordSend(store, lead, r, `Sent WhatsApp opener (${cfg.openerTemplate.name}).`)) {
+    await store.updateLead(lead.id, { first_reply_at: now.toISOString() });
+  }
 }
 
 /** A buyer wrote to Chetan's business WhatsApp number. */
@@ -205,14 +228,39 @@ export async function handleInbound(store: Store, cfg: CatcherConfig, msg: Inbou
   const flaggedBefore = (await store.findLeadByPhone(msg.from))?.needs_chetan ?? false;
   const r = await captureLead(
     store,
-    { source: "whatsapp", phone: msg.from, name: msg.name, message: msg.text, external_id: msg.id, received_at: msg.timestamp },
+    {
+      source: "whatsapp",
+      phone: msg.from,
+      name: msg.name,
+      message: msg.text,
+      external_id: msg.id,
+      received_at: msg.timestamp,
+      autoWhatsApp: true,
+    },
     now,
   );
   if (r.duplicateDelivery) return r.lead;
+  // The message log keeps every inbound message once (wamid is unique); a duplicate stops here too.
+  const logged = await store.addWaMessage({
+    lead_id: r.lead.id,
+    wamid: msg.id,
+    direction: "in",
+    phone: msg.from,
+    kind: msg.kind ?? "text",
+    body: msg.text,
+    template_name: null,
+    status: "received",
+    error: null,
+    actor: "buyer",
+    automated: false,
+    client_ref: null,
+    created_at: msg.timestamp,
+  });
+  if (!logged) return r.lead;
 
   // "STOP" opts the buyer out: no reply, no follow-ups, and Chetan can see why on the card.
   if (STOP.test(msg.text)) {
-    await store.updateLead(r.lead.id, { last_inbound_at: msg.timestamp, awaiting_question: null });
+    await store.updateLead(r.lead.id, { last_inbound_at: msg.timestamp, awaiting_question: null, wa_auto_allowed: false });
     return closeLead(store, r.lead.id, "lost", "Asked to stop messages");
   }
 
@@ -221,6 +269,12 @@ export async function handleInbound(store: Store, cfg: CatcherConfig, msg: Inbou
     followups_unanswered: 0,
     prefers_hinglish: r.lead.prefers_hinglish || looksHinglish(msg.text),
   });
+
+  // Automation off, or Chetan hasn't allowed it for this lead: the message is on the card, Chetan hears about it, the bot stays quiet.
+  if (cfg.canAutomate && !(await cfg.canAutomate(lead))) {
+    await alertChetan(store, cfg, lead, `💬 WhatsApp from ${lead.name ?? "a lead"} ${lead.phone}: "${msg.text.slice(0, 200)}"`);
+    return lead;
+  }
 
   if (lead.needs_chetan) {
     // Hold reply and alert only once, when the money question first appears.
