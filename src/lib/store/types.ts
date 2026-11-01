@@ -1,7 +1,11 @@
+import type { LeadPage, LeadQuery, LeadView } from "../lead-views";
 import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
 
 export type NewLead = Omit<Lead, "id" | "created_at" | "updated_at">;
 export type LeadPatch = Partial<Omit<Lead, "id" | "created_at" | "updated_at">>;
+
+/** The few requirement fields the dashboard's market brief counts, for every lead. */
+export type LeadFacts = Pick<Lead, "property_type" | "budget_min_inr" | "budget_max_inr" | "micro_market" | "status">;
 
 export interface LeadFilter {
   temperature?: Lead["temperature"];
@@ -14,6 +18,13 @@ export interface Store {
   findLeadByPhone(phone: string): Promise<Lead | null>;
   getLead(id: string): Promise<Lead | null>;
   listLeads(filter?: LeadFilter): Promise<Lead[]>;
+  /** One page of the Leads screen, filtered and sorted by the database. */
+  queryLeads(query: LeadQuery): Promise<LeadPage>;
+  countLeads(views: readonly LeadView[]): Promise<Record<LeadView, number>>;
+  /** When each lead first enquired (earliest touch), which can be earlier than the card's created_at for imports. */
+  firstTouchAt(leadIds: string[]): Promise<Record<string, string>>;
+  /** Requirement fields of every lead, for the dashboard's market brief. */
+  leadFacts(): Promise<LeadFacts[]>;
   insertLead(lead: NewLead): Promise<Lead>;
   updateLead(id: string, patch: LeadPatch): Promise<Lead>;
 

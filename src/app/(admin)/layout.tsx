@@ -1,44 +1,44 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { Eye, Plus } from "lucide-react";
+import { MobileNav, Sidebar } from "@/components/shell/sidebar";
+import { isReadOnly } from "@/lib/read-only";
 import { isDemoStore } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-const NAV = [
-  { href: "/board", label: "Board" },
-  { href: "/", label: "Leads" },
-  { href: "/visits", label: "Site visits" },
-  { href: "/projects", label: "Projects" },
-  { href: "/match", label: "Match" },
-  { href: "/channels", label: "Channels" },
-  { href: "/templates", label: "Templates" },
-  { href: "/import", label: "Import" },
-];
-
-/** Chetan's screens: everything except the buyer-facing booking page. */
-export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+/** Every CRM screen except the buyer-facing booking page. */
+export default async function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const collapsed = (await cookies()).get("rn_nav")?.value === "collapsed";
   return (
-    <>
-      {isDemoStore() && (
-        <div className="bg-amber-100 px-4 py-1.5 text-center text-xs text-amber-900">
-          Demo mode: Supabase is not connected, so leads are kept in memory and reset on restart.
-        </div>
-      )}
-      <header className="border-b border-stone-200 bg-white">
-        <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-sm">
-          <Link href="/board" className="font-semibold tracking-tight">
-            Realtyniti
-          </Link>
-          {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className="text-stone-600 hover:text-stone-900">
-              {n.label}
+    <div className="flex min-h-dvh">
+      <Sidebar initialCollapsed={collapsed} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {isReadOnly() && (
+          <div className="flex items-center justify-center gap-2 border-b border-gold-line bg-gold-soft px-4 py-1.5 text-center text-xs text-gold-ink">
+            <Eye className="size-3.5 flex-none" />
+            Read-only preview with your real leads. Nothing you change here is saved, and no messages are sent.
+          </div>
+        )}
+        {isDemoStore() && (
+          <div className="bg-warm-soft px-4 py-1.5 text-center text-xs text-warm">
+            Demo mode: Supabase is not connected, so leads are kept in memory and reset on restart.
+          </div>
+        )}
+        {/* Phones and tablets: the rail becomes a drawer behind this bar. */}
+        <header className="sticky top-0 z-30 border-b border-line bg-ground/90 backdrop-blur lg:hidden">
+          <div className="flex items-center gap-3 px-4 py-2.5 sm:px-6">
+            <MobileNav />
+            <Link href="/" className="font-serif text-[22px] text-ink">
+              RealtyNiti<span className="ml-0.5 inline-block size-1.5 rounded-full bg-gold" />
             </Link>
-          ))}
-          <Link href="/leads/new" className="btn ml-auto">
-            Add lead
-          </Link>
-        </nav>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
-    </>
+            <Link href="/leads/new" className="btn ml-auto h-9 px-3" aria-label="Add lead">
+              <Plus className="size-4" />
+            </Link>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-6 sm:px-6 lg:px-12 lg:py-9">{children}</main>
+      </div>
+    </div>
   );
 }

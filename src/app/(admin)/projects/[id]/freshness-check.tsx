@@ -51,10 +51,10 @@ function AcceptChanges({ p, compared }: { p: Project; compared: FigureState }) {
   return (
     <form action={accept} className="space-y-2 text-sm">
       {changes.length === 0 ? (
-        <p className="text-stone-600">The developer&apos;s figures match what you have.</p>
+        <p className="text-muted">The developer&apos;s figures match what you have.</p>
       ) : (
         <table className="w-full">
-          <thead className="text-left text-xs uppercase text-stone-500">
+          <thead className="text-left text-xs uppercase text-muted">
             <tr>
               <th className="py-1">Accept</th>
               <th className="py-1">Field</th>
@@ -64,12 +64,12 @@ function AcceptChanges({ p, compared }: { p: Project; compared: FigureState }) {
           </thead>
           <tbody>
             {changes.map((c) => (
-              <tr key={c.key} className="border-t border-stone-100 align-top">
+              <tr key={c.key} className="border-t border-line align-top">
                 <td className="py-1.5">
                   <input type="checkbox" name="accept" value={c.key} defaultChecked />
                 </td>
                 <td className="py-1.5 font-medium">{c.label}</td>
-                <td className="py-1.5 text-stone-500 line-through">{c.before || "—"}</td>
+                <td className="py-1.5 text-muted line-through">{c.before || "—"}</td>
                 <td className="py-1.5">{c.after || "—"}</td>
               </tr>
             ))}

@@ -42,7 +42,7 @@ export function NewLeadForm() {
       <button className="btn" disabled={pending}>
         {pending ? "Saving…" : "Save lead card"}
       </button>
-      <p className="text-xs text-stone-500">
+      <p className="text-xs text-muted">
         If this number is already on a card, the details are added to that card instead of creating a second one.
       </p>
     </form>

@@ -7,6 +7,7 @@ import { matchProjects, shortlistMessage, type Match } from "@/lib/match";
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "@/lib/parse";
 import { getStore } from "@/lib/store";
 import type { Requirement } from "@/lib/types";
+import { displayName } from "@/lib/display-name";
 
 type Search = Record<string, string | undefined>;
 
@@ -31,15 +32,15 @@ function MatchRow({ m }: { m: Match }) {
         <Link href={`/projects/${p.id}`} className="font-medium hover:underline">
           {p.name}
         </Link>
-        <div className="text-xs text-stone-500">
+        <div className="text-xs text-muted">
           {p.developer} · {[p.sector, p.micro_market].filter(Boolean).join(", ")}
         </div>
       </div>
-      <div className="flex-1 text-stone-700">
+      <div className="flex-1 text-ink">
         {[p.configurations, formatBudget(p.price_min_inr, p.price_max_inr), p.payment_plan, p.possession && `Possession ${p.possession}`, p.offers]
           .filter(Boolean)
           .join(" · ")}
-        <div className="text-xs text-stone-500">{m.miss ?? m.reasons.join(" · ")}</div>
+        <div className="text-xs text-muted">{m.miss ?? m.reasons.join(" · ")}</div>
       </div>
       <div className="text-right">
         <FreshnessDot p={p} />
@@ -63,7 +64,7 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Match Finder{lead ? ` for ${lead.name ?? lead.phone}` : ""}</h1>
+      <h1 className="page-title">Match Finder{lead ? ` for ${lead.name ? displayName(lead.name).name : lead.phone}` : ""}</h1>
       {!lead && (
         <form className="panel space-y-3">
           <AnswerFields value={req ?? undefined} />
@@ -71,8 +72,8 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
         </form>
       )}
       {lead && (
-        <p className="text-sm text-stone-600">
-          Using the requirement on <Link href={`/leads/${lead.id}`} className="underline">{lead.name ?? lead.phone}&apos;s card</Link>.
+        <p className="text-sm text-muted">
+          Using the requirement on <Link href={`/leads/${lead.id}`} className="underline">{lead.name ? displayName(lead.name).name : lead.phone}&apos;s card</Link>.
         </p>
       )}
 
@@ -81,9 +82,9 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
           <section className="panel">
             <h2 className="mb-1 font-medium">Matches {result.matches.length}</h2>
             {result.matches.length === 0 ? (
-              <p className="text-sm text-stone-500">Nothing in the Project Book fits yet.</p>
+              <p className="text-sm text-muted">Nothing in the Project Book fits yet.</p>
             ) : (
-              <ul className="divide-y divide-stone-100">
+              <ul className="divide-y divide-line">
                 {result.matches.map((m) => (
                   <MatchRow key={m.project.id} m={m} />
                 ))}
@@ -93,7 +94,7 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
           {result.nearMisses.length > 0 && (
             <section className="panel">
               <h2 className="mb-1 font-medium">Near misses {result.nearMisses.length}</h2>
-              <ul className="divide-y divide-stone-100">
+              <ul className="divide-y divide-line">
                 {result.nearMisses.map((m) => (
                   <MatchRow key={m.project.id} m={m} />
                 ))}
@@ -103,7 +104,7 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
           {draft && (
             <section className="panel space-y-2 text-sm">
               <h2 className="font-medium">Shortlist message (draft, check every figure before sending)</h2>
-              <pre className="whitespace-pre-wrap rounded bg-stone-50 p-3 font-sans">{draft}</pre>
+              <pre className="whitespace-pre-wrap rounded bg-subtle p-3 font-sans">{draft}</pre>
               <div className="flex gap-2">
                 <CopyButton text={draft} label="Copy" />
                 {lead && (

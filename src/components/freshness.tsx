@@ -7,7 +7,7 @@ export function FreshnessDot({ p }: { p: Project }) {
   const f = freshness(p);
   const d = daysSinceConfirmed(p);
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-stone-600">
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted">
       <span className={`h-2.5 w-2.5 rounded-full ${STYLE[f]}`} aria-label={f} />
       {d == null ? "never confirmed" : d === 0 ? "confirmed today" : `${d}d ago`}
     </span>
