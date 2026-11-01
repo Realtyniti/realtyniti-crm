@@ -15,14 +15,24 @@ import {
 } from "lucide-react";
 import { addNoteAction, clearFlagAction, markFollowedUpAction } from "@/app/actions";
 import { AssignAgent } from "@/components/assign-agent";
-import { Avatar, SOURCE_LABEL, StatusBadge, TemperatureBadge } from "@/components/badges";
+import { Avatar, NameFlag, SOURCE_LABEL, StatusBadge, TemperatureBadge } from "@/components/badges";
 import { CallAssistant } from "@/components/calling/call-assistant";
 import { CopyButton } from "@/components/copy-button";
 import { LeadRowMenu } from "@/components/lead-row-menu";
 import { bookingUrlFor } from "@/lib/catcher-config";
-import { formatBudget, formatDate, formatDateTime, PURPOSE_LABEL } from "@/lib/format";
+import { formatDate, formatDateTime, PURPOSE_LABEL } from "@/lib/format";
 import { classify, nextQuestion, unansweredQuestions } from "@/lib/intake-sop";
-import { followUpLabel, followUpState, formatPhone, requirementFacts, timelineLabel, whatsappUrl } from "@/lib/lead-display";
+import {
+  budgetLabel,
+  displayName,
+  followUpLabel,
+  followUpState,
+  formatPhone,
+  propertyLabel,
+  requirementFacts,
+  timelineLabel,
+  whatsappUrl,
+} from "@/lib/lead-display";
 import { isReadOnly } from "@/lib/read-only";
 import { getStore } from "@/lib/store";
 import type { LeadEvent } from "@/lib/types";
@@ -86,6 +96,8 @@ export default async function LeadDetailsPage({
   const why = classify(lead).reasons;
   const closed = lead.status === "lost" || lead.status === "converted";
   const fuState = followUpState(lead.next_follow_up_at);
+  const dn = displayName(lead.name);
+  const firstName = dn.name.split(" ")[0];
 
   const timeline: TimelineItem[] = [
     ...events.map((e): TimelineItem => ({
@@ -129,8 +141,8 @@ export default async function LeadDetailsPage({
     ["Enquired on", formatDate(enquiredAt)],
   ];
   const requirement: [string, string | null][] = [
-    ["Property type", lead.property_type],
-    ["Budget", formatBudget(lead.budget_min_inr, lead.budget_max_inr)],
+    ["Property type", propertyLabel(lead.property_type)],
+    ["Budget", budgetLabel(lead)],
     ["Location", lead.micro_market],
     ["Buying timeline", timelineLabel(lead.timeline_months)],
     ["Purpose", lead.purpose ? PURPOSE_LABEL[lead.purpose] : null],
@@ -138,18 +150,19 @@ export default async function LeadDetailsPage({
   ];
 
   return (
-    <div className={`space-y-5 ${call ? "sm:pr-[500px]" : ""}`}>
+    <div className={`space-y-5 ${call ? "lg:pr-[600px]" : ""}`}>
       <Link href="/leads" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted hover:text-ink">
         <ArrowLeft className="size-4" /> Back to leads
       </Link>
 
       {/* Header: who, how to reach them, and the four things to know before calling. */}
       <div className="panel p-0">
-        <div className="flex flex-wrap items-center gap-4 p-5 sm:p-6">
-          <Avatar name={lead.name} size="lg" />
+        <div className="flex flex-wrap items-center gap-5 p-5 sm:p-7">
+          <Avatar name={lead.name} size="xl" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-[26px] leading-tight font-semibold tracking-tight">{lead.name ?? "Unnamed lead"}</h1>
+              <h1 className="font-serif text-[38px] leading-[1.05] tracking-[-0.01em]">{dn.name}</h1>
+              <NameFlag raw={dn.raw} />
               <TemperatureBadge value={lead.temperature} />
               <StatusBadge value={lead.status} />
             </div>
@@ -162,7 +175,7 @@ export default async function LeadDetailsPage({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link href={`/leads/${lead.id}?call=1`} scroll={false} className="btn h-10 px-4">
+            <Link href={`/leads/${lead.id}?call=1`} scroll={false} className="btn-call h-10 px-4">
               <Phone className="size-4" /> Call
             </Link>
             <a href={whatsappUrl(lead.phone)} target="_blank" rel="noreferrer" className="btn-wa h-10 px-4">
@@ -173,29 +186,38 @@ export default async function LeadDetailsPage({
         </div>
         <dl className="grid grid-cols-2 border-t border-line lg:grid-cols-4 [&>div]:border-line [&>div]:px-5 [&>div]:py-3.5 sm:[&>div]:px-6">
           <div className="border-r border-b lg:border-b-0">
-            <dt className="text-[12px] text-muted">Assigned agent</dt>
+            <dt className="eyebrow">Assigned agent</dt>
             <dd className="mt-1">
               <AssignAgent agent={null} />
             </dd>
           </div>
           <div className="border-b lg:border-r lg:border-b-0">
-            <dt className="text-[12px] text-muted">Next follow-up</dt>
+            <dt className="eyebrow">Next follow-up</dt>
             <dd className={`mt-1 text-[15px] font-semibold tabular-nums ${fuState === "overdue" ? "text-hot" : closed || !lead.next_follow_up_at ? "text-faint" : ""}`}>
               {closed ? "Closed" : followUpLabel(lead.next_follow_up_at)}
             </dd>
           </div>
           <div className="border-r">
-            <dt className="text-[12px] text-muted">Next action</dt>
+            <dt className="eyebrow">Next action</dt>
             <dd className="mt-1 truncate text-[14px] font-medium" title={ask?.ask}>
               {closed ? <span className="text-faint">None</span> : ask ? `Ask their ${ASK_LABEL[ask.key] ?? ask.key}` : lead.agreed_site_visit ? "Book the site visit" : "Follow up"}
             </dd>
           </div>
           <div>
-            <dt className="text-[12px] text-muted">Last activity</dt>
+            <dt className="eyebrow">Last activity</dt>
             <dd className="mt-1 text-[14px] font-medium tabular-nums">{lastActivity ? formatDateTime(lastActivity) : <span className="text-faint">None yet</span>}</dd>
           </div>
         </dl>
       </div>
+
+      {dn.raw && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-gold-line bg-gold-soft px-4 py-3 text-[13.5px] text-ink">
+          <strong className="text-gold-ink">Confirm the name on the call.</strong>
+          <span>
+            The enquiry form says &ldquo;{dn.raw}&rdquo;, which looks like a social media name. Try: &ldquo;Main {firstName} ji se baat kar raha hoon?&rdquo;
+          </span>
+        </div>
+      )}
 
       {lead.needs_chetan && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-hot/20 bg-hot-soft px-4 py-3 text-sm text-hot">
@@ -215,7 +237,7 @@ export default async function LeadDetailsPage({
           {/* Requirement first: it's what every call is about. */}
           <section className="panel">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-[15px] font-semibold">Requirement</h2>
+              <h2 className="eyebrow">Requirement</h2>
               <span className="text-[12.5px] text-muted tabular-nums">
                 {requirement.filter(([, v]) => v).length} of {requirement.length} known
               </span>
@@ -223,14 +245,14 @@ export default async function LeadDetailsPage({
             <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
               {requirement.map(([k, v]) => (
                 <div key={k}>
-                  <dt className="text-[12px] text-muted">{k}</dt>
+                  <dt className="eyebrow">{k}</dt>
                   <dd className={`mt-0.5 text-[14.5px] font-semibold ${v ? "" : "font-normal text-faint"}`}>{v ?? "Not asked yet"}</dd>
                 </div>
               ))}
             </dl>
             {ask && !closed && (
-              <p className="mt-4 rounded-xl bg-accent-soft px-3.5 py-2.5 text-[13.5px] text-ink">
-                <span className="font-semibold text-accent">Ask next:</span> {ask.ask}
+              <p className="mt-4 rounded-xl border-l-2 border-gold bg-gold-soft px-3.5 py-2.5 text-[13.5px] text-ink">
+                <span className="font-semibold text-gold-ink">Ask next:</span> {ask.ask}
               </p>
             )}
             <details className="mt-4 border-t border-line pt-3 text-[13px]">
@@ -247,12 +269,12 @@ export default async function LeadDetailsPage({
           {/* Conversation: the latest message on top, then calls and the full history. */}
           <section className="panel min-w-0 p-0">
             <div className="p-5 pb-4 sm:px-6">
-              <h2 className="text-[15px] font-semibold">Latest conversation</h2>
+              <h2 className="eyebrow">Latest conversation</h2>
               {lastMessage ? (
                 <div className={`mt-3 rounded-2xl px-4 py-3 ${lastMessage.kind === "message_in" ? "bg-subtle" : "bg-wa-soft"}`}>
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[12px] text-muted">
                     <span className="font-medium">
-                      {lastMessage.kind === "message_in" ? `${lead.name ?? "Buyer"} wrote` : "We sent"}
+                      {lastMessage.kind === "message_in" ? `${dn.name} wrote` : "We sent"}
                       {lastMessage.channel ? ` on ${SOURCE_LABEL[lastMessage.channel]}` : ""}
                     </span>
                     <time className="tabular-nums">{formatDateTime(lastMessage.created_at)}</time>
@@ -278,7 +300,7 @@ export default async function LeadDetailsPage({
                     scroll={false}
                     role="tab"
                     aria-selected={on}
-                    className={`-mb-px border-b-2 px-2.5 py-3 text-[13.5px] font-medium transition ${on ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink"}`}
+                    className={`-mb-px border-b-2 px-2.5 py-3 text-[13.5px] font-medium transition ${on ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink"}`}
                   >
                     {t.label} <span className="ml-0.5 text-faint tabular-nums">{t.n}</span>
                   </Link>
@@ -340,14 +362,14 @@ export default async function LeadDetailsPage({
         <div className="space-y-5">
           <section className="panel">
             <div className="flex items-center justify-between">
-              <h2 className="text-[15px] font-semibold">Follow-up</h2>
+              <h2 className="eyebrow">Follow-up</h2>
               {fuState && !closed && <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${FOLLOW_TONE[fuState]}`}>{FOLLOW_LABEL[fuState]}</span>}
             </div>
             {closed ? (
               <p className="mt-2 text-sm text-muted">Closed{lead.lost_reason ? `: ${lead.lost_reason}` : "."}</p>
             ) : (
               <>
-                <p className={`mt-2 text-xl font-semibold tracking-tight tabular-nums ${fuState === "overdue" ? "text-hot" : ""}`}>{followUpLabel(lead.next_follow_up_at)}</p>
+                <p className={`mt-2 font-serif text-[30px] leading-tight ${fuState === "overdue" ? "text-hot" : ""}`}>{followUpLabel(lead.next_follow_up_at)}</p>
                 {lead.next_follow_up_at && <p className="text-[12.5px] text-muted">{formatDateTime(lead.next_follow_up_at)}</p>}
                 <form action={markFollowedUpAction.bind(null, lead.id)} className="mt-4 space-y-2">
                   <label htmlFor="fu-note" className="sr-only">
@@ -368,7 +390,7 @@ export default async function LeadDetailsPage({
           </section>
 
           <section className="panel">
-            <h2 className="text-[15px] font-semibold">Contact</h2>
+            <h2 className="eyebrow">Contact</h2>
             <dl className="mt-3 space-y-2.5 text-[13.5px]">
               {customer.map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-3">
@@ -377,7 +399,7 @@ export default async function LeadDetailsPage({
                 </div>
               ))}
             </dl>
-            <h3 className="mt-5 border-t border-line pt-4 text-[15px] font-semibold">Site visits</h3>
+            <h3 className="eyebrow mt-5 border-t border-line pt-4">Site visits</h3>
             {visits.length === 0 ? (
               <p className="mt-1.5 text-[13.5px] text-muted">None booked{lead.agreed_site_visit ? ", though they said yes to a visit." : "."}</p>
             ) : (

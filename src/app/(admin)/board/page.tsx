@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SOURCE_LABEL, TemperatureBadge } from "@/components/badges";
 import { buildBoard } from "@/lib/board";
 import { requirementLine } from "@/lib/catcher";
+import { displayName } from "@/lib/display-name";
 import { formatDate } from "@/lib/format";
 import { getStore } from "@/lib/store";
 import type { Lead } from "@/lib/types";
@@ -11,7 +12,7 @@ function LeadRow({ l, extra }: { l: Lead; extra?: string }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 py-1.5 text-sm">
       <Link href={`/leads/${l.id}`} className="font-medium hover:underline">
-        {l.name ?? l.phone}
+        {l.name ? displayName(l.name).name : l.phone}
       </Link>
       <TemperatureBadge value={l.temperature} />
       <span className="text-muted">{requirementLine(l)}</span>
@@ -42,7 +43,7 @@ export default async function BoardPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Pipeline board</h1>
+      <h1 className="page-title">Pipeline board</h1>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title="Follow-ups due today" count={b.dueToday.length} tone="border-stone-900">
@@ -106,7 +107,7 @@ export default async function BoardPage() {
                   <span className="text-muted">{g.leads.length}</span>
                 </div>
                 <div className="text-xs text-muted">
-                  {g.leads.slice(0, 6).map((l) => l.name ?? l.phone).join(", ")}
+                  {g.leads.slice(0, 6).map((l) => (l.name ? displayName(l.name).name : l.phone)).join(", ")}
                   {g.leads.length > 6 ? "…" : ""}
                 </div>
               </li>

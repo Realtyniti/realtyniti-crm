@@ -22,7 +22,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         ← All projects
       </Link>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{p.name}</h1>
+        <h1 className="page-title">{p.name}</h1>
         <span className="text-muted">{p.developer}</span>
         <FreshnessDot p={p} />
         {p.confirmed_by && <span className="text-xs text-muted">by {p.confirmed_by}</span>}

@@ -14,7 +14,7 @@ export default async function TemplatesPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Message templates</h1>
+        <h1 className="page-title">Message templates</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
           Approve each message once before it can be sent automatically. A template can never mention a price, payment
           plan, discount or offer; those you send yourself. Editing the text withdraws its approval.

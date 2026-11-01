@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
 import { cleanSearch, viewWindow, type LeadQuery, type LeadView } from "../lead-views";
-import type { LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
+import type { LeadFacts, LeadFilter, LeadPatch, NewLead, Store, VisitFilter } from "./types";
 
 /** Server-only store backed by Supabase, using the service role key. */
 export class SupabaseStore implements Store {
@@ -56,6 +56,10 @@ export class SupabaseStore implements Store {
       }),
     );
     return Object.fromEntries(counts) as Record<LeadView, number>;
+  }
+
+  async leadFacts() {
+    return many<LeadFacts>(await this.db.from("leads").select("property_type, budget_min_inr, budget_max_inr, micro_market, status"));
   }
 
   async firstTouchAt(leadIds: string[]) {

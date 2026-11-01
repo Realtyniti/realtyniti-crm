@@ -13,7 +13,7 @@ export default async function ProjectsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+        <h1 className="page-title">Projects</h1>
         <Link href="/projects/new" className="btn-ghost ml-auto">
           Add project
         </Link>

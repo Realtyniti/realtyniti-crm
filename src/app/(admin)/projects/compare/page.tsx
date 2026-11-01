@@ -16,7 +16,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
       <Link href="/projects" className="text-sm text-muted hover:underline">
         ← All projects
       </Link>
-      <h1 className="text-2xl font-semibold tracking-tight">Comparison note (draft)</h1>
+      <h1 className="page-title">Comparison note (draft)</h1>
       {!note ? (
         <p className="panel text-sm text-muted">Tick two or three projects on the Projects page.</p>
       ) : (

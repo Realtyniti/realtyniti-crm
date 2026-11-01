@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Menu,
   Radio,
+  Search,
   SearchCheck,
   Upload,
   Users,
@@ -63,7 +64,7 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
             (collapsed ? (
               <div className="mx-3 my-3 h-px bg-white/10" />
             ) : (
-              <div className="px-3 pt-5 pb-1.5 text-[10.5px] font-semibold tracking-[0.1em] text-navy-fg/55 uppercase">{g.label}</div>
+              <div className="px-3 pt-5 pb-1.5 text-[10.5px] font-semibold tracking-[0.12em] text-navy-fg/50 uppercase">{g.label}</div>
             ))}
           {g.items.map((item) => {
             const active = isActive(path, item);
@@ -75,12 +76,12 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
                 onClick={onNavigate}
                 title={collapsed ? item.label : undefined}
                 aria-current={active ? "page" : undefined}
-                className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium transition ${
-                  active ? "bg-navy-2 text-white" : "text-navy-fg hover:bg-white/5 hover:text-white"
+                className={`group relative flex items-center gap-3 rounded-lg px-3 py-[7px] text-[13.5px] font-medium transition ${
+                  active ? "bg-white/[0.09] text-white" : "text-navy-fg hover:bg-white/5 hover:text-white"
                 } ${collapsed ? "justify-center px-0" : ""}`}
               >
-                {active && <span className="absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full bg-accent" />}
-                <Icon className="size-[18px] flex-none" strokeWidth={1.75} />
+                {active && <span className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-gold" />}
+                <Icon className="size-[17px] flex-none" strokeWidth={1.75} />
                 {!collapsed && <span>{item.label}</span>}
               </Link>
             );
@@ -93,15 +94,30 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
 
 function Brand({ collapsed }: { collapsed: boolean }) {
   return (
-    <Link href="/" className={`flex items-center gap-2.5 px-2 ${collapsed ? "justify-center px-0" : ""}`}>
-      <span className="grid size-8 flex-none place-items-center rounded-lg bg-accent text-sm font-bold text-white">R</span>
-      {!collapsed && (
-        <span className="leading-tight">
-          <span className="block text-[15px] font-semibold tracking-tight text-white">RealtyNiti</span>
-          <span className="block text-[11px] font-medium text-navy-fg/70">CRM</span>
-        </span>
-      )}
+    <Link href="/" aria-label="RealtyNiti home" className={`flex items-baseline gap-0.5 px-2.5 font-serif text-white ${collapsed ? "justify-center px-0 text-[26px]" : "text-[26px]"}`}>
+      {collapsed ? "R" : "RealtyNiti"}
+      <span className="inline-block size-1.5 rounded-full bg-gold" />
     </Link>
+  );
+}
+
+/** Search lives in the rail, so every screen can jump to a lead by name or phone. */
+function RailSearch() {
+  return (
+    <form action="/leads" role="search" className="relative mt-5">
+      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-navy-fg/60" />
+      <label htmlFor="rail-search" className="sr-only">
+        Search leads
+      </label>
+      <input
+        id="rail-search"
+        name="q"
+        type="search"
+        placeholder="Search leads"
+        className="h-9 w-full rounded-lg border border-white/10 bg-white/[0.06] pr-2 pl-8 text-[13px] text-white outline-none placeholder:text-navy-fg/60 focus:border-gold/60"
+      />
+      <input type="hidden" name="view" value="all" />
+    </form>
   );
 }
 
@@ -122,7 +138,8 @@ export function Sidebar({ initialCollapsed }: { initialCollapsed: boolean }) {
         }`}
       >
         <Brand collapsed={collapsed} />
-        <div className="mt-7 flex-1 overflow-y-auto">
+        {!collapsed && <RailSearch />}
+        <div className="mt-4 flex-1 overflow-y-auto">
           <NavList collapsed={collapsed} />
         </div>
         <button
@@ -167,7 +184,8 @@ export function MobileNav() {
                 <X className="size-[18px]" />
               </button>
             </div>
-            <div className="mt-7 flex-1 overflow-y-auto">
+            <RailSearch />
+            <div className="mt-4 flex-1 overflow-y-auto">
               <NavList collapsed={false} onNavigate={() => setOpen(false)} />
             </div>
           </aside>

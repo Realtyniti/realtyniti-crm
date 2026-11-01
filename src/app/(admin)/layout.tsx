@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Eye, Plus, Search } from "lucide-react";
+import { Eye, Plus } from "lucide-react";
 import { MobileNav, Sidebar } from "@/components/shell/sidebar";
 import { isReadOnly } from "@/lib/read-only";
 import { isDemoStore } from "@/lib/store";
@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
       <Sidebar initialCollapsed={collapsed} />
       <div className="flex min-w-0 flex-1 flex-col">
         {isReadOnly() && (
-          <div className="flex items-center justify-center gap-2 bg-navy px-4 py-1.5 text-center text-xs text-navy-fg">
+          <div className="flex items-center justify-center gap-2 border-b border-gold-line bg-gold-soft px-4 py-1.5 text-center text-xs text-gold-ink">
             <Eye className="size-3.5 flex-none" />
             Read-only preview with your real leads. Nothing you change here is saved, and no messages are sent.
           </div>
@@ -25,30 +25,19 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
             Demo mode: Supabase is not connected, so leads are kept in memory and reset on restart.
           </div>
         )}
-        <header className="sticky top-0 z-30 border-b border-line bg-surface/85 backdrop-blur">
-          <div className="flex items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        {/* Phones and tablets: the rail becomes a drawer behind this bar. */}
+        <header className="sticky top-0 z-30 border-b border-line bg-ground/90 backdrop-blur lg:hidden">
+          <div className="flex items-center gap-3 px-4 py-2.5 sm:px-6">
             <MobileNav />
-            <form action="/leads" className="relative max-w-md flex-1" role="search">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
-              <label htmlFor="global-search" className="sr-only">
-                Search leads
-              </label>
-              <input
-                id="global-search"
-                name="q"
-                type="search"
-                placeholder="Search leads by name or phone"
-                className="input h-9 rounded-lg border-transparent bg-subtle pl-9 focus:bg-surface"
-              />
-              <input type="hidden" name="view" value="all" />
-            </form>
-            <Link href="/leads/new" className="btn ml-auto h-9">
+            <Link href="/" className="font-serif text-[22px] text-ink">
+              RealtyNiti<span className="ml-0.5 inline-block size-1.5 rounded-full bg-gold" />
+            </Link>
+            <Link href="/leads/new" className="btn ml-auto h-9 px-3" aria-label="Add lead">
               <Plus className="size-4" />
-              <span className="hidden sm:inline">Add lead</span>
             </Link>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-6 sm:px-6 lg:px-12 lg:py-9">{children}</main>
       </div>
     </div>
   );

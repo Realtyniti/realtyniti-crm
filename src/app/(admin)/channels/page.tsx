@@ -25,7 +25,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Channel board</h1>
+        <h1 className="page-title">Channel board</h1>
         <div className="ml-auto flex gap-2">
           {(["week", "month"] as const).map((x) => (
             <Link

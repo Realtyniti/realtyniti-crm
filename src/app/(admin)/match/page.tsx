@@ -7,6 +7,7 @@ import { matchProjects, shortlistMessage, type Match } from "@/lib/match";
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "@/lib/parse";
 import { getStore } from "@/lib/store";
 import type { Requirement } from "@/lib/types";
+import { displayName } from "@/lib/display-name";
 
 type Search = Record<string, string | undefined>;
 
@@ -63,7 +64,7 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Match Finder{lead ? ` for ${lead.name ?? lead.phone}` : ""}</h1>
+      <h1 className="page-title">Match Finder{lead ? ` for ${lead.name ? displayName(lead.name).name : lead.phone}` : ""}</h1>
       {!lead && (
         <form className="panel space-y-3">
           <AnswerFields value={req ?? undefined} />
@@ -72,7 +73,7 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
       )}
       {lead && (
         <p className="text-sm text-muted">
-          Using the requirement on <Link href={`/leads/${lead.id}`} className="underline">{lead.name ?? lead.phone}&apos;s card</Link>.
+          Using the requirement on <Link href={`/leads/${lead.id}`} className="underline">{lead.name ? displayName(lead.name).name : lead.phone}&apos;s card</Link>.
         </p>
       )}
 

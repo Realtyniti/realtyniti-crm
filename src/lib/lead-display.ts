@@ -24,8 +24,8 @@ export function timelineLabel(months: number | null): string | null {
 /** What we already know about the requirement, in the order a salesperson reads it. */
 export function requirementFacts(l: Lead): string[] {
   return [
-    l.property_type,
-    formatBudget(l.budget_min_inr, l.budget_max_inr),
+    propertyLabel(l.property_type),
+    budgetLabel(l),
     l.micro_market,
     timelineLabel(l.timeline_months),
     l.purpose ? PURPOSE_LABEL[l.purpose] : null,
@@ -60,4 +60,43 @@ export function followUpLabel(iso: string | null, now = new Date()): string {
   const tomorrowEnd = endOfTodayIst(now).getTime() + 86_400_000;
   if (new Date(iso).getTime() <= tomorrowEnd) return `Tomorrow, ${formatTime(iso)}`;
   return formatDate(iso);
+}
+
+export { displayName, type DisplayName } from "./display-name";
+
+/** Budget for the screen: a single figure when the form gave one number twice. */
+export function budgetLabel(l: Pick<Lead, "budget_min_inr" | "budget_max_inr">): string | null {
+  if (l.budget_min_inr != null && l.budget_min_inr === l.budget_max_inr) return formatBudget(l.budget_min_inr, null)!.replace(/\+$/, "");
+  return formatBudget(l.budget_min_inr, l.budget_max_inr);
+}
+
+/** "both" comes from a Meta form option meaning 2 or 3 BHK. */
+export function propertyLabel(t: string | null): string | null {
+  return t === "both" ? "2 or 3 BHK" : t;
+}
+
+export type FollowUpBucket = "overdue" | "today" | "tomorrow" | "week" | "later" | "none";
+export const BUCKET_LABEL: Record<FollowUpBucket, string> = {
+  overdue: "Overdue",
+  today: "Today",
+  tomorrow: "Tomorrow",
+  week: "This week",
+  later: "Later",
+  none: "No follow-up set",
+};
+
+/** Which group a lead falls in on the Leads list and the call queue. */
+export function followUpBucket(iso: string | null, now = new Date()): FollowUpBucket {
+  const state = followUpState(iso, now);
+  if (!iso || !state) return "none";
+  if (state !== "upcoming") return state;
+  const t = new Date(iso).getTime(), end = endOfTodayIst(now).getTime();
+  if (t <= end + 86_400_000) return "tomorrow";
+  if (t <= end + 6 * 86_400_000) return "week";
+  return "later";
+}
+
+/** Small counts read better as words in a sentence ("one overdue follow-up"). */
+export function countWord(n: number): string {
+  return ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] ?? String(n);
 }

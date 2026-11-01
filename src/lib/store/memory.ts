@@ -48,6 +48,16 @@ export class MemoryStore implements Store {
     return Object.fromEntries(views.map((v) => [v, leads.filter((l) => matchesView(l, v)).length])) as Record<LeadView, number>;
   }
 
+  async leadFacts() {
+    return [...this.leads.values()].map(({ property_type, budget_min_inr, budget_max_inr, micro_market, status }) => ({
+      property_type,
+      budget_min_inr,
+      budget_max_inr,
+      micro_market,
+      status,
+    }));
+  }
+
   async firstTouchAt(leadIds: string[]) {
     const out: Record<string, string> = {};
     for (const t of this.touches) {

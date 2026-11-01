@@ -3,6 +3,7 @@ import { toggleSlotAction, visitStatusAction } from "@/app/actions";
 import { getStore } from "@/lib/store";
 import { formatSlotTime, IST, slotsWithBookings } from "@/lib/visits";
 import { NewSlotsForm } from "./forms";
+import { displayName } from "@/lib/display-name";
 
 export default async function VisitsPage() {
   const store = getStore();
@@ -15,7 +16,7 @@ export default async function VisitsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Site visits</h1>
+      <h1 className="page-title">Site visits</h1>
       <p className="max-w-2xl text-sm text-muted">
         Buyers can only pick from slots you open here, at least 2 hours ahead. Hot leads get their booking link
         automatically; you can also copy a link from any lead card.
@@ -43,7 +44,7 @@ export default async function VisitsPage() {
                     return (
                       <li key={v.id} className="flex flex-wrap items-center gap-2">
                         <Link href={`/leads/${v.lead_id}`} className="font-medium hover:underline">
-                          {l?.name ?? l?.phone ?? "Lead"}
+                          {l?.name ? displayName(l.name).name : (l?.phone ?? "Lead")}
                         </Link>
                         <span className="text-muted">
                           {v.people} ppl{v.pickup ? ` · pickup ${v.pickup}` : ""}

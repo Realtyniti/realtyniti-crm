@@ -1,53 +1,65 @@
 @import "tailwindcss";
 
 /*
- * RealtyNiti design tokens. Every colour on every screen comes from here:
- * deep navy navigation, white cards on an off-white ground, one blue accent,
- * green only for WhatsApp, and fixed colours for lead temperature.
+ * RealtyNiti design system. Every colour on every screen comes from here.
+ *   Ground   warm ivory canvas, white work surfaces, hairline dividers instead of stacked cards.
+ *   Brand    deep navy for navigation and primary buttons; champagne only for brand marks,
+ *            the active page, progress, scripts and name flags.
+ *   Action   blue = call, green = WhatsApp, red = overdue. Nothing else is coloured.
+ *   Type     Inter for everything operational; Instrument Serif (font-serif) only for the
+ *            wordmark, page titles, the day's summary and customer names in headers.
  */
 :root {
-  --background: #f6f7fb;
-  --foreground: #0f1729;
+  --background: #f7f4ee;
+  --foreground: #141924;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-serif);
   --font-mono: var(--font-geist-mono);
 
-  --color-ground: #f6f7fb;
+  --color-ground: #f7f4ee;
   --color-surface: #ffffff;
-  --color-subtle: #f0f2f7;
-  --color-line: #e5e8ef;
-  --color-ink: #0f1729;
-  --color-muted: #5d6880;
-  --color-faint: #8a93a8;
+  --color-subtle: #f1ece3;
+  --color-line: #e8e2d7;
+  --color-line-strong: #ddd5c8;
+  --color-ink: #141924;
+  --color-ink-2: #3a4150;
+  --color-muted: #6f7584;
+  --color-faint: #a4a9b3;
 
-  --color-navy: #0d1a36;
-  --color-navy-2: #16264a;
-  --color-navy-fg: #c3cde4;
+  --color-navy: #0e1b33;
+  --color-navy-2: #182b4f;
+  --color-navy-fg: #b5c0d6;
 
-  --color-accent: #2557e6;
-  --color-accent-hover: #1d47c4;
-  --color-accent-soft: #eaf0fe;
-  --color-wa: #14a44d;
-  --color-wa-hover: #0f8a40;
-  --color-wa-soft: #e7f7ee;
+  --color-gold: #b8955a;
+  --color-gold-ink: #86672f;
+  --color-gold-soft: #f5eddd;
+  --color-gold-line: #e6d6b6;
 
-  --color-hot: #c8322a;
-  --color-hot-soft: #fdeeec;
+  --color-accent: #2a59d1;
+  --color-accent-hover: #2149b4;
+  --color-accent-soft: #edf2fd;
+  --color-wa: #138548;
+  --color-wa-hover: #0f6f3c;
+  --color-wa-soft: #eaf6ef;
+
+  --color-hot: #c8433a;
+  --color-hot-soft: #fbecea;
   --color-warm: #b0670a;
   --color-warm-soft: #fdf4e4;
   --color-cold: #3466ad;
-  --color-cold-soft: #ebf2fb;
+  --color-cold-soft: #ebf1fa;
   --color-new: #6b4fd8;
   --color-new-soft: #f0ecfd;
   --color-good: #15803d;
   --color-good-soft: #e8f6ed;
 
-  --shadow-card: 0 1px 2px rgb(15 23 41 / 0.04), 0 2px 8px -2px rgb(15 23 41 / 0.06);
-  --shadow-lift: 0 16px 40px -8px rgb(15 23 41 / 0.16), 0 4px 10px -2px rgb(15 23 41 / 0.06);
+  --shadow-card: 0 1px 2px rgb(20 25 36 / 0.05), 0 4px 14px -6px rgb(20 25 36 / 0.08);
+  --shadow-lift: 0 18px 44px -12px rgb(14 27 51 / 0.28), 0 4px 10px -2px rgb(14 27 51 / 0.06);
 }
 
 body {
@@ -74,24 +86,33 @@ body {
 /* Shared form and layout pieces, used by every screen (old and new). In the components layer so utilities can override them. */
 @layer components {
   .input {
-    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent/15;
+    @apply w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none transition placeholder:text-faint focus:border-gold focus:ring-4 focus:ring-gold/15;
   }
+  /* Primary action: navy. */
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white shadow-[0_1px_2px_rgb(37_87_230/0.25),inset_0_1px_0_rgb(255_255_255/0.12)] transition hover:bg-accent-hover active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-sm font-medium text-white shadow-[0_1px_2px_rgb(14_27_51/0.3),inset_0_1px_0_rgb(255_255_255/0.08)] transition hover:bg-navy-2 active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+  }
+  /* Calling: blue, everywhere. */
+  .btn-call {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white shadow-[0_1px_2px_rgb(42_89_209/0.3),inset_0_1px_0_rgb(255_255_255/0.12)] transition hover:bg-accent-hover active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium text-ink shadow-[0_1px_2px_rgb(15_23_41/0.04)] transition hover:border-faint/50 hover:bg-subtle active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 py-2 text-sm font-medium text-ink transition hover:bg-subtle active:translate-y-px disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-wa {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-wa px-3.5 py-2 text-sm font-medium text-white shadow-[0_1px_2px_rgb(20_164_77/0.25),inset_0_1px_0_rgb(255_255_255/0.12)] transition hover:bg-wa-hover active:translate-y-px;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-wa px-3.5 py-2 text-sm font-medium text-white transition hover:bg-wa-hover active:translate-y-px;
   }
   .label {
-    @apply mb-1 block text-xs font-medium tracking-wide text-muted uppercase;
+    @apply mb-1 block text-xs font-medium text-muted;
   }
   .panel {
     @apply rounded-2xl border border-line bg-surface p-5 shadow-card;
   }
   .eyebrow {
-    @apply text-[11px] font-semibold tracking-[0.08em] text-muted uppercase;
+    @apply text-[11px] font-semibold tracking-[0.12em] text-muted uppercase;
+  }
+  /* Page titles are the one place the serif appears on every screen. */
+  .page-title {
+    @apply font-serif text-[40px] leading-[1.05] font-normal tracking-[-0.015em] text-ink;
   }
 }
