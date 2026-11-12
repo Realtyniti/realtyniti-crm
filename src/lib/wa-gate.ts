@@ -62,6 +62,11 @@ export class GatedSender implements WhatsAppSender {
     return this.send(to, { kind: "template", body, template: t.name }, ctx, () => this.inner.sendTemplate(to, t, ctx));
   }
 
+  /**
+   * Reserve, then send. The log row is written BEFORE Meta is called; its client_ref is unique in
+   * the database, so when the same form is submitted twice at once only one insert succeeds and only
+   * that request calls Meta. The other gets the existing row back as a duplicate.
+   */
   private async send(
     to: string,
     content: { kind: "text" | "template"; body: string; template?: string },
@@ -71,11 +76,6 @@ export class GatedSender implements WhatsAppSender {
     const automated = ctx?.automated ?? true;
     const isAlert = !!this.opts.chetanPhone && to === this.opts.chetanPhone;
     const clientRef = ctx?.clientRef ?? null;
-
-    if (clientRef) {
-      const seen = await this.store.findWaMessage({ clientRef });
-      if (seen) return { status: toResult(seen.status), wamid: seen.wamid, error: seen.error, duplicate: true };
-    }
 
     const leadId = isAlert ? null : (ctx?.leadId ?? null);
     const lead = leadId ? await this.store.getLead(leadId) : null;
@@ -94,33 +94,46 @@ export class GatedSender implements WhatsAppSender {
       client_ref: clientRef,
     };
 
-    if (reason) {
-      await this.store.addWaMessage({ ...row, wamid: null, status: "blocked", error: reason });
-      return { status: "blocked", wamid: null, error: reason };
+    const reserved = await this.store.addWaMessage(
+      reason ? { ...row, wamid: null, status: "blocked", error: reason } : { ...row, wamid: null, status: "sending", error: null },
+    );
+    if (!reserved) {
+      // Only a repeated client_ref can collide here: this submission was already handled (or is in flight).
+      const seen = clientRef ? await this.store.findWaMessage({ clientRef }) : null;
+      return { status: seen ? toResult(seen.status) : "sending", wamid: seen?.wamid ?? null, error: seen?.error ?? null, duplicate: true };
     }
+    if (reason) return { status: "blocked", wamid: null, error: reason };
 
     let result: SendResult;
     try {
       result = await deliver();
     } catch (e) {
+      // Not retried: Meta may or may not have queued it, and a retry could reach the buyer twice.
       const error = (e as Error).message.slice(0, 500);
-      const failed = await this.store.addWaMessage({ ...row, wamid: null, status: "failed", error });
-      if (failed && !isAlert) await this.opts.onFailure?.(failed).catch(() => undefined);
+      const failed = await this.store.updateWaMessage(reserved.id, { status: "failed", error });
+      if (!isAlert) await this.opts.onFailure?.(failed).catch(() => undefined);
       return { status: "failed", wamid: null, error };
     }
-    const saved = await this.store.addWaMessage({ ...row, wamid: result.wamid, status: result.status, error: result.error ?? null });
-    if (!saved) return { ...result, duplicate: true };
+    try {
+      await this.store.updateWaMessage(reserved.id, {
+        status: result.status === "sending" ? "sending" : result.status,
+        wamid: result.wamid,
+        error: result.error ?? null,
+      });
+    } catch (e) {
+      // The message went out; only the log update failed. Report it, never resend.
+      console.error("wa_messages update after send failed", reserved.id, e);
+    }
     return result;
   }
 }
 
 function toResult(s: WaMessage["status"]): SendResult["status"] {
-  if (s === "delivered" || s === "read") return "sent";
-  if (s === "received") return "sent";
+  if (s === "delivered" || s === "read" || s === "received") return "sent";
   return s;
 }
 
-const RANK: Record<string, number> = { blocked: 0, dry_run: 0, failed: 1, sent: 2, delivered: 3, read: 4 };
+const RANK: Record<string, number> = { blocked: 0, dry_run: 0, sending: 1, failed: 1, sent: 2, delivered: 3, read: 4 };
 
 /**
  * A delivery receipt from Meta. Statuses only move forward (sent, delivered, read),

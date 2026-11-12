@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { handleInbound, type CatcherConfig } from "@/lib/catcher";
+import { readFileSync } from "node:fs";
+import { handleInbound, handleReceipt, type CatcherConfig } from "@/lib/catcher";
+import { runFollowUpClock } from "@/lib/followup-clock";
 import { captureLead, saveTemplate } from "@/lib/leads";
 import { parseMicroMarket } from "@/lib/parse";
 import { QUALIFYING_QUESTIONS } from "@/lib/intake-sop";
@@ -19,6 +21,11 @@ class FakeMeta implements WhatsAppSender {
   readonly live = true;
   calls: { to: string; text?: string; template?: string; ctx?: SendContext }[] = [];
   fail: string | null = null;
+  /** Milliseconds Meta takes to answer, to let two requests overlap. */
+  delay = 0;
+  /** What the log said about this message at the moment Meta was called. */
+  logAtCall: string[] = [];
+  onCall?: () => Promise<void>;
   async sendText(to: string, text: string, ctx?: SendContext): Promise<SendResult> {
     return this.go({ to, text, ctx });
   }
@@ -26,6 +33,8 @@ class FakeMeta implements WhatsAppSender {
     return this.go({ to, template: t.name, ctx });
   }
   private async go(c: FakeMeta["calls"][number]): Promise<SendResult> {
+    await this.onCall?.();
+    if (this.delay) await new Promise((r) => setTimeout(r, this.delay));
     if (this.fail) throw new Error(this.fail);
     this.calls.push(c);
     return { status: "sent", wamid: `wamid.out.${this.calls.length}` };
@@ -328,5 +337,129 @@ describe("one question bank for calls and WhatsApp", () => {
     });
     expect(answersToRequirement({ purpose: { values: [option("purpose", "Both")] } }).purpose).toBe("investment");
     expect(answersToRequirement({ budget: { values: [], skipped: true } })).toEqual({});
+  });
+});
+
+describe("review fixes: one submission can never reach Meta twice", () => {
+  const NOW = new Date();
+  const cfg = (): CatcherConfig => ({ sender: gated, chetanPhone: CHETAN, openerTemplate: null, alertTemplate: null });
+
+  async function openLead() {
+    await settings({ outbound_enabled: true, test_numbers: [BUYER] });
+    const { lead } = await captureLead(store, { source: "meta", phone: BUYER, name: "Ravi" });
+    return store.updateLead(lead.id, { last_inbound_at: new Date(NOW.getTime() - 3600_000).toISOString() });
+  }
+
+  it("reserves the message in the log before Meta is called", async () => {
+    const l = await openLead();
+    meta.onCall = async () => {
+      meta.logAtCall.push(...(await store.listWaMessages(l.id)).map((m) => m.status));
+    };
+    await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", clientRef: "r1" }, NOW);
+    expect(meta.logAtCall).toEqual(["sending"]);
+    expect((await store.listWaMessages(l.id)).map((m) => m.status)).toEqual(["sent"]);
+  });
+
+  it("two simultaneous submissions of the same form call Meta once", async () => {
+    const l = await openLead();
+    meta.delay = 30;
+    const input = { leadId: l.id, body: "Brochure attached", clientRef: "same-click" };
+    const results = await Promise.all([1, 2, 3].map(() => sendManualReply(store, cfg(), input, NOW)));
+    expect(meta.calls).toHaveLength(1);
+    expect(results.filter((r) => r.ok && !r.result.duplicate)).toHaveLength(1);
+    expect(results.filter((r) => r.ok && r.result.duplicate && r.result.status === "sending")).toHaveLength(2);
+    expect(await store.listWaMessages(l.id)).toHaveLength(1);
+    // Only the one real send is written on the card.
+    expect((await store.listEvents(l.id)).filter((e) => e.kind === "message_out")).toHaveLength(1);
+  });
+
+  it("a different form submission is a separate message", async () => {
+    const l = await openLead();
+    await sendManualReply(store, cfg(), { leadId: l.id, body: "One", clientRef: "a" }, NOW);
+    await sendManualReply(store, cfg(), { leadId: l.id, body: "Two", clientRef: "b" }, NOW);
+    expect(meta.calls).toHaveLength(2);
+  });
+});
+
+describe("review fixes: accepted by Meta, then failed", () => {
+  const receipt = (id: string, status: string, errors?: unknown[]) => ({
+    entry: [{ changes: [{ field: "messages", value: { statuses: [{ id, status, timestamp: "1767225600", recipient_id: "919876543210", errors }] } }] }],
+  });
+
+  it("flags the lead, alerts Chetan once, pauses automation for the lead, and resends nothing", async () => {
+    await allOn();
+    const cfg: CatcherConfig = { sender: gated, chetanPhone: CHETAN, openerTemplate: null, alertTemplate: null, canAutomate: (l) => canAutomate(store, l) };
+    const { lead } = await captureLead(store, { source: "meta", phone: BUYER, name: "Ravi", autoWhatsApp: true });
+    const sent = await gated.sendText(BUYER, "Hi Ravi", { leadId: lead.id });
+    expect(sent.status).toBe("sent");
+    const toBuyer = () => meta.calls.filter((c) => c.to === BUYER).length;
+    const toChetan = () => meta.calls.filter((c) => c.to === CHETAN).length;
+    expect([toBuyer(), toChetan()]).toEqual([1, 0]);
+
+    const [failed] = statusUpdates(receipt(sent.wamid!, "failed", [{ code: 131026, title: "Message undeliverable" }]));
+    await handleReceipt(store, cfg, failed);
+    // Meta sometimes repeats a webhook: the second copy changes nothing.
+    await handleReceipt(store, cfg, failed);
+
+    const after = (await store.getLead(lead.id))!;
+    expect(after.needs_chetan).toBe(true);
+    expect(after.needs_chetan_reason).toMatch(/failed to deliver/);
+    expect((await store.listEvents(lead.id)).filter((e) => e.kind === "flag" && /failed/.test(e.body))).toHaveLength(1);
+    expect(toChetan()).toBe(1);
+    expect(toBuyer()).toBe(1);
+    expect((await store.findWaMessage({ wamid: sent.wamid! }))!.status).toBe("failed");
+
+    // The flag pauses the Follow-up Clock and the bot for this lead until Chetan clears it.
+    await store.updateLead(lead.id, { next_follow_up_at: new Date(Date.now() - 3600_000).toISOString() });
+    await runFollowUpClock(store, cfg, new Date("2026-11-04T06:00:00Z"));
+    await handleInbound(store, cfg, { id: "wamid.in.after", from: BUYER, name: "Ravi", text: "hello?", timestamp: new Date().toISOString(), kind: "text" });
+    expect(toBuyer()).toBe(1);
+  });
+});
+
+describe("review fixes: the existing leads stay out of automation", () => {
+  it("94 leads from before the migration get nothing with every switch on, even when they enquire again", async () => {
+    await allOn();
+    const cfg: CatcherConfig = { sender: gated, chetanPhone: CHETAN, openerTemplate: null, alertTemplate: null, canAutomate: (l) => canAutomate(store, l) };
+    const phones = Array.from({ length: 94 }, (_, i) => `+9198${String(10000000 + i).padStart(8, "0")}`);
+    // As after the migration: every existing row has wa_auto_allowed = false.
+    for (const phone of phones) await captureLead(store, { source: "other", phone, name: "Old lead" });
+    // Some come back in through a Meta form and through WhatsApp.
+    for (const phone of phones.slice(0, 5)) await captureLead(store, { source: "meta", phone, autoWhatsApp: true });
+    for (const [i, phone] of phones.slice(5, 10).entries()) {
+      await handleInbound(store, cfg, { id: `wamid.old.${i}`, from: phone, name: "Old lead", text: "Hi, still looking", timestamp: new Date().toISOString(), kind: "text" });
+    }
+    for (const phone of phones) {
+      const l = (await store.findLeadByPhone(phone))!;
+      expect(l.wa_auto_allowed).toBe(false);
+      expect(await canAutomate(store, l)).toBe(false);
+      await store.updateLead(l.id, { next_follow_up_at: new Date(Date.now() - 3600_000).toISOString() });
+    }
+    await runFollowUpClock(store, cfg, new Date("2026-11-04T06:00:00Z"));
+    // The only messages are alerts to Chetan about the five who wrote in.
+    expect(meta.calls.filter((c) => c.to !== CHETAN)).toHaveLength(0);
+    expect(meta.calls.filter((c) => c.to === CHETAN)).toHaveLength(5);
+  });
+});
+
+describe("review fixes: the migration", () => {
+  const sql = readFileSync("supabase/migrations/0010_whatsapp_readiness.sql", "utf8").replace(/--.*$/gm, "");
+
+  it("only adds: no update, delete, drop or truncate of existing data", () => {
+    // "on delete set null" is the foreign-key rule for a lead deleted later, not a delete now.
+    expect(sql.replace(/on delete set null/g, "")).not.toMatch(/\b(update|delete|drop|truncate)\b/i);
+    expect(sql).toMatch(/add column wa_auto_allowed boolean not null default false/);
+  });
+
+  it("locks the new tables to the server", () => {
+    for (const t of ["wa_messages", "whatsapp_settings"]) {
+      expect(sql).toContain(`alter table ${t} enable row level security;`);
+      expect(sql).toContain(`revoke all on table ${t} from anon, authenticated;`);
+      expect(sql).not.toMatch(new RegExp(`create policy[^;]*on ${t}`, "i"));
+    }
+  });
+
+  it("allows every status the code writes", () => {
+    for (const s of ["received", "sending", "blocked", "dry_run", "sent", "delivered", "read", "failed"]) expect(sql).toContain(`'${s}'`);
   });
 });

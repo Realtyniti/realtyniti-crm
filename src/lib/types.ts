@@ -169,7 +169,8 @@ export interface ChannelSpend {
 
 export type WaDirection = "in" | "out";
 /** received (inbound); blocked = stopped by the send gate before reaching Meta; dry_run = WhatsApp not connected. */
-export type WaStatus = "received" | "blocked" | "dry_run" | "sent" | "delivered" | "read" | "failed";
+/** sending: reserved in the log, waiting for Meta's answer. */
+export type WaStatus = "received" | "sending" | "blocked" | "dry_run" | "sent" | "delivered" | "read" | "failed";
 
 /** Every WhatsApp message in or out, with Meta's message id and delivery status. */
 export interface WaMessage {

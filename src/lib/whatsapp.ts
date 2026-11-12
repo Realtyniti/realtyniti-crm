@@ -24,8 +24,11 @@ export interface SendContext {
 }
 
 export interface SendResult {
-  /** sent: Meta accepted it. dry_run: WhatsApp not connected. blocked: stopped by the send gate. failed: Meta refused it. */
-  status: "sent" | "dry_run" | "blocked" | "failed";
+  /**
+   * sent: Meta accepted it. dry_run: WhatsApp not connected. blocked: stopped by the send gate. failed: Meta refused it.
+   * sending: only on a duplicate, when the first submission is still waiting for Meta.
+   */
+  status: "sent" | "dry_run" | "blocked" | "failed" | "sending";
   wamid: string | null;
   error?: string | null;
   /** The same reply form was submitted twice; nothing new was sent. */

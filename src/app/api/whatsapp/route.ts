@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { alertChetan, handleInbound } from "@/lib/catcher";
+import { handleInbound, handleReceipt } from "@/lib/catcher";
 import { catcherConfig } from "@/lib/catcher-config";
 import { verifyMetaSignature } from "@/lib/intake/meta";
 import { getStore } from "@/lib/store";
-import { applyStatus } from "@/lib/wa-gate";
 import { inboundMessages, statusUpdates } from "@/lib/whatsapp";
 
 /** Meta's one-time webhook verification handshake. */
@@ -39,15 +38,8 @@ export async function POST(req: Request) {
 
   for (const update of statusUpdates(body)) {
     try {
-      const r = await applyStatus(store, update);
-      // Meta refused a message to a buyer after accepting it: flag the card and tell Chetan once.
-      if (r?.newlyFailed && r.message.lead_id) {
-        const lead = await store.getLead(r.message.lead_id);
-        if (lead) {
-          await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `WhatsApp message failed: ${update.error ?? "no reason given"}` });
-          await alertChetan(store, cfg, lead, `⚠️ WhatsApp to ${lead.name ?? lead.phone} failed: ${update.error ?? "no reason given"}`);
-        }
-      }
+      // A message Meta accepted but later failed: flag the lead and alert Chetan once. Never resent.
+      await handleReceipt(store, cfg, update);
     } catch (e) {
       console.error("whatsapp status failed", update.wamid, e);
     }

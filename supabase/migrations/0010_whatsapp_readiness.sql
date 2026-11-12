@@ -18,7 +18,8 @@ create table wa_messages (
   kind text not null default 'text' check (kind in ('text', 'template', 'media')),
   body text not null,
   template_name text,
-  status text not null check (status in ('received', 'blocked', 'dry_run', 'sent', 'delivered', 'read', 'failed')),
+  -- sending: reserved before Meta is called, so a form submitted twice can only call Meta once.
+  status text not null check (status in ('received', 'sending', 'blocked', 'dry_run', 'sent', 'delivered', 'read', 'failed')),
   error text,
   actor text not null check (actor in ('chetan', 'bot', 'system', 'buyer')),
   automated boolean not null default false,
@@ -40,5 +41,11 @@ create table whatsapp_settings (
 );
 insert into whatsapp_settings (id) values (true) on conflict (id) do nothing;
 
+-- Only the CRM server reads or writes these, with the service role key (which bypasses RLS).
+-- RLS on with no policies means the public (anon) and signed-in (authenticated) roles get no rows,
+-- and the grants are revoked too, so a browser holding the public key cannot read the log or
+-- change the switches, even if a policy were added by mistake later.
 alter table wa_messages enable row level security;
 alter table whatsapp_settings enable row level security;
+revoke all on table wa_messages from anon, authenticated;
+revoke all on table whatsapp_settings from anon, authenticated;

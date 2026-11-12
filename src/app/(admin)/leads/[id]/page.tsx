@@ -74,6 +74,7 @@ const ASK_LABEL: Record<string, string> = {
 };
 const WA_STATUS: Record<WaMessage["status"], { label: string; tone: string }> = {
   received: { label: "Received", tone: "bg-cold-soft text-cold" },
+  sending: { label: "Sending", tone: "bg-subtle text-muted" },
   blocked: { label: "Not sent", tone: "bg-hot-soft text-hot" },
   dry_run: { label: "Dry run", tone: "bg-subtle text-muted" },
   sent: { label: "Sent", tone: "bg-subtle text-ink" },

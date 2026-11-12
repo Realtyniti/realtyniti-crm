@@ -6,7 +6,8 @@ import type { Store } from "./store/types";
 import { DEFAULT_BRAND, firstReplyKey, renderForSending, TemplateError } from "./templates";
 import { formatBudget } from "./format";
 import type { Lead, Requirement } from "./types";
-import { windowOpen, type InboundMessage, type SendResult, type WhatsAppSender } from "./whatsapp";
+import { applyStatus } from "./wa-gate";
+import { windowOpen, type InboundMessage, type SendResult, type StatusUpdate, type WhatsAppSender } from "./whatsapp";
 
 /*
  * Realtyniti Lead Catcher (SYS-02). Greets every new enquiry, asks the five
@@ -136,6 +137,24 @@ export async function alertChetan(store: Store, cfg: CatcherConfig, lead: Lead, 
     : await cfg.sender.sendText(cfg.chetanPhone, line, ctx);
   const prefix = r.status === "sent" ? "" : r.status === "dry_run" ? "[dry run] " : `[not sent: ${r.error ?? r.status}] `;
   await store.addEvent({ lead_id: lead.id, kind: "note", channel: null, body: `${prefix}Alert to Chetan: ${line}` });
+}
+
+/**
+ * A delivery receipt from Meta. When a message Meta had accepted is later marked failed, the lead
+ * is flagged for Chetan (which also pauses the bot and the Follow-up Clock for that lead until he
+ * clears it) and Chetan gets one alert. Nothing is resent: a failed message stays failed.
+ */
+export async function handleReceipt(store: Store, cfg: CatcherConfig, update: StatusUpdate): Promise<void> {
+  const r = await applyStatus(store, update);
+  if (!r?.newlyFailed || !r.message.lead_id) return;
+  const lead = await store.getLead(r.message.lead_id);
+  if (!lead) return;
+  const why = update.error ?? "no reason given";
+  await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `WhatsApp message failed: ${why}` });
+  if (!lead.needs_chetan) {
+    await store.updateLead(lead.id, { needs_chetan: true, needs_chetan_reason: `WhatsApp message failed to deliver (${why})` });
+  }
+  await alertChetan(store, cfg, lead, `⚠️ WhatsApp to ${lead.name ?? lead.phone} failed: ${why}`);
 }
 
 function nextStep(lead: Lead): Step | null {

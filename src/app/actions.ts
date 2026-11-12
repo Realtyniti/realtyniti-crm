@@ -266,7 +266,7 @@ export async function sendWhatsAppReplyAction(leadId: string, _: ActionState, fd
   });
   revalidatePath(`/leads/${leadId}`);
   if (!r.ok) return { error: r.error };
-  if (r.result.duplicate) return { ok: "Already sent." };
+  if (r.result.duplicate) return { ok: r.result.status === "sending" ? "Already being sent." : "Already sent." };
   return { ok: r.result.status === "dry_run" ? "Recorded as a dry run: WhatsApp is not connected." : "Sent." };
 }
 
