@@ -81,6 +81,7 @@ const WA_STATUS: Record<WaMessage["status"], { label: string; tone: string }> = 
   delivered: { label: "Delivered", tone: "bg-wa-soft text-wa" },
   read: { label: "Read", tone: "bg-wa-soft text-wa" },
   failed: { label: "Failed", tone: "bg-hot-soft text-hot" },
+  uncertain: { label: "Unconfirmed", tone: "bg-warm-soft text-warm" },
 };
 const WA_ACTOR: Record<WaMessage["actor"], string> = { buyer: "Buyer", chetan: "Chetan", bot: "Automatic", system: "System" };
 const FOLLOW_LABEL = { overdue: "Overdue", today: "Due today", upcoming: "Upcoming" } as const;

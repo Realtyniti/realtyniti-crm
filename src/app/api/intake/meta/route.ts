@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       const token = change.page_id ? await pageAccessToken(change.page_id, page.token, appSecret) : page.token;
       const lead = await fetchMetaLead(change.leadgen_id, token, appSecret);
       // A live enquiry: it may get automatic WhatsApp messages once the switches allow (the backfill never does).
-      const result = await captureLead(store, { ...metaLeadToInput(lead, page.brand), autoWhatsApp: true });
+      const result = await captureLead(store, metaLeadToInput(lead, page.brand));
       if (result.created) {
         const form = await formName(lead.form_id ?? change.form_id, token, appSecret);
         if (form) await store.addEvent({ lead_id: result.lead.id, kind: "note", channel: "meta", body: `Lead form: ${form}` });

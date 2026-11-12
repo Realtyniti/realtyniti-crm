@@ -115,18 +115,19 @@ export async function bookVisit(
     body: `${rescheduled ? "Visit rescheduled" : "Site visit booked"}: ${when}, ${slot.area}${visit.pickup ? `, pickup from ${visit.pickup}` : ""}, ${visit.people} ${visit.people === 1 ? "person" : "people"}${visit.project_interest ? `, interested in ${visit.project_interest}` : ""}.`,
   });
 
-  await sendVisitMessage(store, cfg, updated, slot, "visit.confirmed");
+  await sendVisitMessage(store, cfg, updated, slot, "visit.confirmed", `visit:${visit.id}`);
   await alertChetan(
     store,
     cfg,
     updated,
     `📅 ${rescheduled ? "Visit moved" : "Visit booked"}: ${updated.name ?? updated.phone} ${updated.phone}, ${when}, ${slot.area}, ${visit.people} ppl${visit.pickup ? `, pickup ${visit.pickup}` : ""}${visit.project_interest ? `, wants ${visit.project_interest}` : ""}`,
+    `visit:${visit.id}:booked`,
   );
   return { visit, slot, rescheduled };
 }
 
 /** Free text only inside WhatsApp's 24-hour window; otherwise Chetan is told to message them. */
-async function sendVisitMessage(store: Store, cfg: CatcherConfig, lead: Lead, slot: VisitSlot, key: string, now = new Date()) {
+async function sendVisitMessage(store: Store, cfg: CatcherConfig, lead: Lead, slot: VisitSlot, key: string, trigger: string, now = new Date()) {
   if (!windowOpen(lead.last_inbound_at, now)) {
     await store.addEvent({
       lead_id: lead.id,
@@ -136,7 +137,7 @@ async function sendVisitMessage(store: Store, cfg: CatcherConfig, lead: Lead, sl
     });
     return false;
   }
-  return sendApproved(store, cfg, lead, key, {
+  return sendApproved(store, cfg, lead, key, trigger, {
     when: formatSlot(slot),
     area: slot.area,
     address: slot.address,
@@ -167,11 +168,11 @@ export async function sendDueReminders(store: Store, cfg: CatcherConfig, now = n
       const lead = await store.getLead(v.lead_id);
       if (!lead) continue;
       if (!v.reminder_2h_sent_at && hoursAway <= 2 && hoursAway > 0) {
-        await sendVisitMessage(store, cfg, lead, slot, "visit.reminder_2h", now);
+        await sendVisitMessage(store, cfg, lead, slot, "visit.reminder_2h", `visit:${v.id}`, now);
         await store.updateVisit(v.id, { reminder_2h_sent_at: now.toISOString() });
         sent++;
       } else if (!v.reminder_evening_sent_at && !v.reminder_2h_sent_at && hoursAway > 2 && istDay(start) === tomorrow && istHour >= 18) {
-        await sendVisitMessage(store, cfg, lead, slot, "visit.reminder_evening", now);
+        await sendVisitMessage(store, cfg, lead, slot, "visit.reminder_evening", `visit:${v.id}`, now);
         await store.updateVisit(v.id, { reminder_evening_sent_at: now.toISOString() });
         sent++;
       }

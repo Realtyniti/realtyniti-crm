@@ -13,13 +13,15 @@ import { windowOpen, type SendResult } from "./whatsapp";
  */
 
 export const MAX_REPLY = 4096;
+const UNCERTAIN =
+  "WhatsApp did not confirm this message, so it may or may not have arrived. It will not be resent automatically. Check with the buyer before sending it again.";
 
 export type ReplyOutcome = { ok: true; result: SendResult } | { ok: false; error: string };
 
 export async function sendManualReply(
   store: Store,
   cfg: CatcherConfig,
-  input: { leadId: string; body: string; clientRef: string | null },
+  input: { leadId: string; body: string; sendKey: string | null },
   now = new Date(),
 ): Promise<ReplyOutcome> {
   const lead = await store.getLead(input.leadId);
@@ -34,21 +36,23 @@ export async function sendManualReply(
     };
   }
 
+  if (!input.sendKey) return { ok: false, error: "This form has expired. Reload the page and try again." };
+
   const result = await cfg.sender.sendText(lead.phone, body, {
     leadId: lead.id,
     automated: false,
     actor: "chetan",
-    clientRef: input.clientRef,
+    sendKey: `manual:${input.sendKey}`,
   });
   if (result.duplicate) {
     if (result.status === "blocked" || result.status === "failed") return { ok: false, error: `Not sent: ${result.error ?? "refused"}` };
+    if (result.status === "uncertain") return { ok: false, error: UNCERTAIN };
     return { ok: true, result };
   }
+  // A refused or unconfirmed message has already been flagged on the lead by the send gate.
   if (result.status === "blocked") return { ok: false, error: `Not sent: ${result.error}` };
-  if (result.status === "failed") {
-    await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `WhatsApp message failed: ${result.error}` });
-    return { ok: false, error: `WhatsApp refused it: ${result.error}` };
-  }
+  if (result.status === "failed") return { ok: false, error: `WhatsApp refused it: ${result.error}` };
+  if (result.status === "uncertain") return { ok: false, error: UNCERTAIN };
   await store.addEvent({
     lead_id: lead.id,
     kind: "message_out",

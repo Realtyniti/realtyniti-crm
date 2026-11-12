@@ -44,7 +44,7 @@ export default async function WhatsAppSettingsPage() {
         <h2 className="eyebrow mb-2 text-ink">What a lead needs before the bot messages it</h2>
         <ol className="list-decimal space-y-1 pl-5">
           <li>Sending and automatic messages both on (and, in test mode, its number on the list).</li>
-          <li>Automatic WhatsApp allowed on that lead&apos;s page. Imported and existing leads start not allowed.</li>
+          <li>Automatic WhatsApp allowed on that lead&apos;s page. Every lead starts not allowed, whatever its source; only you can allow it.</li>
           <li>For follow-ups: the lead was already reached on WhatsApp, and the message template is approved.</li>
         </ol>
       </section>

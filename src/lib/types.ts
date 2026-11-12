@@ -99,8 +99,6 @@ export interface LeadInput extends Partial<Requirement> {
   message?: string | null;
   raw?: unknown;
   received_at?: string;
-  /** A live enquiry (Meta webhook, website, WhatsApp) that may get automatic WhatsApp messages. Imports and backfills never do. */
-  autoWhatsApp?: boolean;
 }
 
 export interface VisitSlot {
@@ -170,7 +168,8 @@ export interface ChannelSpend {
 export type WaDirection = "in" | "out";
 /** received (inbound); blocked = stopped by the send gate before reaching Meta; dry_run = WhatsApp not connected. */
 /** sending: reserved in the log, waiting for Meta's answer. */
-export type WaStatus = "received" | "sending" | "blocked" | "dry_run" | "sent" | "delivered" | "read" | "failed";
+/** uncertain: no clear answer from Meta, or no record of the answer; may or may not have been delivered. */
+export type WaStatus = "received" | "sending" | "blocked" | "dry_run" | "sent" | "delivered" | "read" | "failed" | "uncertain";
 
 /** Every WhatsApp message in or out, with Meta's message id and delivery status. */
 export interface WaMessage {
@@ -191,7 +190,7 @@ export interface WaMessage {
   actor: "chetan" | "bot" | "system" | "buyer";
   automated: boolean;
   /** One-time id from the reply form, so a double click cannot send twice. */
-  client_ref: string | null;
+  send_key: string | null;
   created_at: string;
   status_at: string | null;
 }

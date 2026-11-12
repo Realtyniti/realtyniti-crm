@@ -75,18 +75,26 @@ export async function runFollowUpClock(store: Store, cfg: CatcherConfig, now = n
 
     // The CRM follow-up template for this tag must be approved by Chetan, whichever way the message goes out.
     const key = `followup.${lead.temperature ?? "warm"}`;
+    // This follow-up's identity is the lead and the due time it answers: overlapping or repeated
+    // clock runs see the same due time, so the database lets only one of them send it.
+    const trigger = `followup:${lead.id}:${lead.next_follow_up_at}`;
     const approved = !!(await store.getTemplate(key))?.approved_at;
     let sent = false;
     if (!approved) {
       sent = false;
     } else if (windowOpen(lead.last_inbound_at, now)) {
-      sent = await sendApproved(store, cfg, lead, key);
+      sent = await sendApproved(store, cfg, lead, key, trigger);
     } else if (cfg.followupTemplate) {
       const r = await cfg.sender.sendTemplate(
         lead.phone,
         { ...cfg.followupTemplate, params: [lead.name?.split(" ")[0] ?? "there", lead.brand] },
-        { leadId: lead.id, automated: true, actor: "bot" },
+        { leadId: lead.id, automated: true, actor: "bot", sendKey: `${trigger}:template` },
       );
+      if (r.duplicate) {
+        // Another run already sent (or is sending) this follow-up; it moves the date on, not this one.
+        result.leftForChetan++;
+        continue;
+      }
       sent = r.status === "sent" || r.status === "dry_run";
       await store.addEvent({
         lead_id: lead.id,

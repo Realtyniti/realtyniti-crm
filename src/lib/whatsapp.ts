@@ -19,16 +19,23 @@ export interface SendContext {
   /** True (the default) for anything the CRM sends on its own; false only for a reply Chetan typed. */
   automated?: boolean;
   actor?: "chetan" | "bot" | "system";
-  /** One-time id from the reply form; a second send with the same id is refused as a duplicate. */
-  clientRef?: string | null;
+  /**
+   * The message's stable identity, e.g. "in:<wamid>:question.budget", "followup:<lead>:<due time>",
+   * "manual:<form id>". Reserved in the database before Meta is called (unique), so the same logical
+   * message is sent at most once however many webhooks, cron runs or clicks trigger it.
+   * Required for every automatic message.
+   */
+  sendKey?: string | null;
 }
 
 export interface SendResult {
   /**
    * sent: Meta accepted it. dry_run: WhatsApp not connected. blocked: stopped by the send gate. failed: Meta refused it.
-   * sending: only on a duplicate, when the first submission is still waiting for Meta.
+   * uncertain: no clear answer from Meta (timeout, network error, server error), so it may or may not
+   * have been delivered. Never retried; Chetan is asked to check.
+   * sending: only on a duplicate, when the first attempt is still waiting for Meta.
    */
-  status: "sent" | "dry_run" | "blocked" | "failed" | "sending";
+  status: "sent" | "dry_run" | "blocked" | "failed" | "uncertain" | "sending";
   wamid: string | null;
   error?: string | null;
   /** The same reply form was submitted twice; nothing new was sent. */
@@ -37,6 +44,24 @@ export interface SendResult {
 
 /** True when the message went out (or would have, in dry-run mode). */
 export const delivered = (r: SendResult) => r.status === "sent" || r.status === "dry_run";
+
+/**
+ * Why a send to Meta did not succeed.
+ * rejected: Meta answered with a 4xx error, so the message was definitely not accepted.
+ * uncertain: timeout, network failure, 5xx or an unreadable answer: Meta may have queued it.
+ */
+export class WhatsAppSendError extends Error {
+  constructor(
+    readonly kind: "rejected" | "uncertain",
+    message: string,
+  ) {
+    super(message);
+    this.name = "WhatsAppSendError";
+  }
+}
+
+/** How long to wait for Meta before treating the send as uncertain. */
+export const SEND_TIMEOUT_MS = 20_000;
 
 export interface WhatsAppSender {
   /** True when messages actually leave; false in dry-run (demo) mode. */
@@ -53,14 +78,28 @@ export class CloudApiSender implements WhatsAppSender {
   ) {}
 
   private async post(payload: object): Promise<SendResult> {
-    const res = await fetch(`${GRAPH_API}/${this.phoneNumberId}/messages`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ messaging_product: "whatsapp", ...payload }),
-    });
-    if (!res.ok) throw new Error(`WhatsApp send failed ${res.status}: ${await res.text()}`);
-    const json = (await res.json()) as { messages?: { id: string }[] };
-    return { status: "sent", wamid: json.messages?.[0]?.id ?? null };
+    let res: Response;
+    try {
+      res = await fetch(`${GRAPH_API}/${this.phoneNumberId}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", ...payload }),
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      });
+    } catch (e) {
+      throw new WhatsAppSendError("uncertain", `No answer from WhatsApp (${(e as Error).name === "TimeoutError" ? "timed out" : (e as Error).message})`);
+    }
+    const text = await res.text().catch(() => "");
+    if (res.status >= 400 && res.status < 500) throw new WhatsAppSendError("rejected", `WhatsApp refused it (${res.status}): ${text.slice(0, 300)}`);
+    if (!res.ok) throw new WhatsAppSendError("uncertain", `WhatsApp server error (${res.status}): ${text.slice(0, 300)}`);
+    let wamid: string | null = null;
+    try {
+      wamid = (JSON.parse(text) as { messages?: { id: string }[] }).messages?.[0]?.id ?? null;
+    } catch {
+      /* handled below */
+    }
+    if (!wamid) throw new WhatsAppSendError("uncertain", "WhatsApp answered without a message id");
+    return { status: "sent", wamid };
   }
 
   sendText(to: string, body: string) {

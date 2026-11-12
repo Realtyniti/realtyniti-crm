@@ -15,7 +15,9 @@ export async function GET(req: Request) {
   const store = getStore();
   const digest = buildDigest(await store.listLeads(), new Date(), await store.listProjects());
   if (!digest) return NextResponse.json({ sent: false, reason: "nothing to report" });
-  const ctx = { automated: true, actor: "system" as const };
+  // One digest per IST day, however often the cron fires.
+  const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  const ctx = { automated: true, actor: "system" as const, sendKey: `digest:${day}` };
   const r = cfg.alertTemplate
     ? await cfg.sender.sendTemplate(cfg.chetanPhone, { ...cfg.alertTemplate, params: [digest] }, ctx)
     : await cfg.sender.sendText(cfg.chetanPhone, digest, ctx);

@@ -4,6 +4,7 @@ import { normalisePhone } from "./phone";
 import { isReadOnly } from "./read-only";
 import { bookingToken } from "./visits";
 import { getStore } from "./store";
+import { reportSendProblem } from "./catcher";
 import { canAutomate, GatedSender } from "./wa-gate";
 import { CloudApiSender, DryRunSender, type WhatsAppSender } from "./whatsapp";
 
@@ -19,8 +20,12 @@ export function catcherConfig(): CatcherConfig {
   const token = process.env.WHATSAPP_TOKEN;
   const store = getStore();
   const chetanPhone = normalisePhone(process.env.CHETAN_WHATSAPP);
-  // A refusal at send time is flagged on the card by the caller; refusals reported later by Meta arrive as receipts (api/whatsapp).
-  sender ??= new GatedSender(id && token && !isReadOnly() ? new CloudApiSender(id, token) : new DryRunSender(), store, { chetanPhone });
+  // A buyer message that was refused, unconfirmed or unrecorded flags the lead and alerts Chetan once.
+  // Failures Meta reports later arrive as delivery receipts (api/whatsapp).
+  sender ??= new GatedSender(id && token && !isReadOnly() ? new CloudApiSender(id, token) : new DryRunSender(), store, {
+    chetanPhone,
+    onProblem: (m, problem) => reportSendProblem(store, catcherConfig(), m, problem),
+  });
   const language = process.env.WHATSAPP_TEMPLATE_LANG || "en";
   const opener = process.env.WHATSAPP_OPENER_TEMPLATE;
   const alert = process.env.WHATSAPP_ALERT_TEMPLATE;

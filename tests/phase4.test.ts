@@ -26,15 +26,16 @@ beforeEach(async () => {
 async function contacted(leadId: string, phone = BUYER) {
   await store.addWaMessage({
     lead_id: leadId, wamid: `wamid.out.${leadId}`, direction: "out", phone, kind: "text", body: "Hi", template_name: null,
-    status: "sent", error: null, actor: "bot", automated: true, client_ref: null,
+    status: "sent", error: null, actor: "bot", automated: true, send_key: null,
   });
 }
 
 async function dueLead(opts: { inboundHoursAgo?: number; contacted?: boolean; allowed?: boolean } = {}) {
   const { lead } = await captureLead(store, {
     source: "meta", phone: BUYER, name: "Ravi", micro_market: "Noida", budget_max_inr: 5e6, timeline_months: 4,
-    autoWhatsApp: opts.allowed ?? true,
   });
+  // Every lead starts not allowed; tests stand in for Chetan pressing "Allow automatic messages".
+  if (opts.allowed ?? true) await store.updateLead(lead.id, { wa_auto_allowed: true });
   if (opts.contacted ?? true) await contacted(lead.id);
   return store.updateLead(lead.id, {
     next_follow_up_at: new Date(NOON.getTime() - 3600_000).toISOString(),
@@ -94,7 +95,7 @@ describe("Follow-up Clock", () => {
     for (const status of ["dry_run", "blocked", "failed"] as const) {
       await store.addWaMessage({
         lead_id: lead.id, wamid: null, direction: "out", phone: BUYER, kind: "text", body: "Hi", template_name: null,
-        status, error: null, actor: "bot", automated: true, client_ref: null,
+        status, error: null, actor: "bot", automated: true, send_key: null,
       });
     }
     cfg.followupTemplate = { name: "realtyniti_followup", language: "en" };

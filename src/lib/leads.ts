@@ -89,8 +89,9 @@ export async function captureLead(store: Store, input: LeadInput, now = new Date
       brand: input.brand?.trim() || DEFAULT_BRAND,
       followups_unanswered: 0,
       last_followup_at: null,
-      // Only live enquiries may get automatic WhatsApp messages; imports, backfills and hand-added leads wait for Chetan's OK.
-      wa_auto_allowed: input.autoWhatsApp ?? false,
+      // An enquiry is not consent to automatic WhatsApp. Every lead, from any source, starts not allowed;
+      // only Chetan's "Allow automatic messages" button on the customer page turns it on.
+      wa_auto_allowed: false,
     });
     created = true;
   } else {

@@ -10,7 +10,7 @@ import { MemoryStore } from "@/lib/store/memory";
 import { SAFE_WHATSAPP_SETTINGS, type WhatsAppSettings } from "@/lib/types";
 import { applyStatus, BLOCK, blockReason, canAutomate, GatedSender } from "@/lib/wa-gate";
 import { sendManualReply, settingsFromForm } from "@/lib/wa-reply";
-import { statusUpdates, type MetaTemplateRef, type SendContext, type SendResult, type WhatsAppSender } from "@/lib/whatsapp";
+import { statusUpdates, WhatsAppSendError, type MetaTemplateRef, type SendContext, type SendResult, type WhatsAppSender } from "@/lib/whatsapp";
 
 const BUYER = "+919876543210";
 const OTHER = "+919811122233";
@@ -21,6 +21,7 @@ class FakeMeta implements WhatsAppSender {
   readonly live = true;
   calls: { to: string; text?: string; template?: string; ctx?: SendContext }[] = [];
   fail: string | null = null;
+  failKind: "rejected" | "uncertain" = "rejected";
   /** Milliseconds Meta takes to answer, to let two requests overlap. */
   delay = 0;
   /** What the log said about this message at the moment Meta was called. */
@@ -35,7 +36,7 @@ class FakeMeta implements WhatsAppSender {
   private async go(c: FakeMeta["calls"][number]): Promise<SendResult> {
     await this.onCall?.();
     if (this.delay) await new Promise((r) => setTimeout(r, this.delay));
-    if (this.fail) throw new Error(this.fail);
+    if (this.fail) throw new WhatsAppSendError(this.failKind, this.fail);
     this.calls.push(c);
     return { status: "sent", wamid: `wamid.out.${this.calls.length}` };
   }
@@ -44,7 +45,7 @@ class FakeMeta implements WhatsAppSender {
 let store: MemoryStore;
 let meta: FakeMeta;
 let gated: GatedSender;
-let failures: string[];
+let problems: string[];
 
 const settings = (patch: Partial<WhatsAppSettings>) => store.updateWhatsAppSettings(patch);
 const allOn = () => settings({ outbound_enabled: true, automation_enabled: true, test_mode: false });
@@ -52,8 +53,8 @@ const allOn = () => settings({ outbound_enabled: true, automation_enabled: true,
 beforeEach(async () => {
   store = new MemoryStore();
   meta = new FakeMeta();
-  failures = [];
-  gated = new GatedSender(meta, store, { chetanPhone: CHETAN, onFailure: async (m) => void failures.push(m.id) });
+  problems = [];
+  gated = new GatedSender(meta, store, { chetanPhone: CHETAN, onProblem: async (m, p) => void problems.push(`${p}:${m.id}`) });
   for (const t of await store.listTemplates()) await saveTemplate(store, t.key, t.body, true);
 });
 
@@ -93,12 +94,13 @@ describe("send gate rules", () => {
 
 describe("GatedSender", () => {
   async function lead(allowed: boolean, phone = BUYER) {
-    return (await captureLead(store, { source: "meta", phone, name: "Ravi", autoWhatsApp: allowed })).lead;
+    const { lead } = await captureLead(store, { source: "meta", phone, name: "Ravi" });
+    return allowed ? store.updateLead(lead.id, { wa_auto_allowed: true }) : lead;
   }
 
   it("with the default switches, nothing reaches Meta and the attempt is logged", async () => {
     const l = await lead(true);
-    const r = await gated.sendText(BUYER, "Hi", { leadId: l.id });
+    const r = await gated.sendText(BUYER, "Hi", { leadId: l.id, sendKey: "t:1" });
     expect(r).toMatchObject({ status: "blocked", error: BLOCK.off });
     expect(meta.calls).toHaveLength(0);
     expect(await store.listWaMessages(l.id)).toMatchObject([{ status: "blocked", direction: "out", error: BLOCK.off }]);
@@ -107,7 +109,7 @@ describe("GatedSender", () => {
   it("credentials plus switches on still send nothing automatic to a lead not allowed", async () => {
     await allOn();
     const l = await lead(false);
-    expect((await gated.sendText(BUYER, "Hi", { leadId: l.id, automated: true })).status).toBe("blocked");
+    expect((await gated.sendText(BUYER, "Hi", { leadId: l.id, automated: true, sendKey: "t:1" })).status).toBe("blocked");
     expect(await canAutomate(store, l)).toBe(false);
     expect(meta.calls).toHaveLength(0);
   });
@@ -115,21 +117,21 @@ describe("GatedSender", () => {
   it("sends when every switch allows it and logs Meta's message id", async () => {
     await allOn();
     const l = await lead(true);
-    const r = await gated.sendText(BUYER, "Hi", { leadId: l.id, automated: true });
+    const r = await gated.sendText(BUYER, "Hi", { leadId: l.id, automated: true, sendKey: "t:1" });
     expect(r).toMatchObject({ status: "sent", wamid: "wamid.out.1" });
     expect(await store.leadsContactedOnWhatsApp([l.id])).toEqual(new Set([l.id]));
   });
 
   it("lets an alert to Chetan through with only sending on", async () => {
     await settings({ outbound_enabled: true });
-    expect((await gated.sendText(CHETAN, "New hot lead")).status).toBe("sent");
+    expect((await gated.sendText(CHETAN, "New hot lead", { sendKey: "alert:t" })).status).toBe("sent");
     expect(meta.calls.map((c) => c.to)).toEqual([CHETAN]);
   });
 
   it("sends a form's message once, however many times it is submitted", async () => {
     await settings({ outbound_enabled: true, test_numbers: [BUYER] });
     const l = await lead(false);
-    const ctx = { leadId: l.id, automated: false, actor: "chetan" as const, clientRef: "ref-1" };
+    const ctx = { leadId: l.id, automated: false, actor: "chetan" as const, sendKey: "ref-1" };
     const first = await gated.sendText(BUYER, "Hello", ctx);
     const again = await gated.sendText(BUYER, "Hello", ctx);
     expect(first.duplicate).toBeUndefined();
@@ -140,12 +142,12 @@ describe("GatedSender", () => {
   it("logs a refusal as failed, does not retry, and reports it", async () => {
     await allOn();
     const l = await lead(true);
-    meta.fail = "WhatsApp send failed (400): bad number";
-    const r = await gated.sendText(BUYER, "Hi", { leadId: l.id });
+    meta.fail = "WhatsApp refused it (400): bad number";
+    const r = await gated.sendText(BUYER, "Hi", { leadId: l.id, sendKey: "t:1" });
     expect(r.status).toBe("failed");
     expect(meta.calls).toHaveLength(0);
     expect(await store.listWaMessages(l.id)).toMatchObject([{ status: "failed", error: meta.fail }]);
-    expect(failures).toHaveLength(1);
+    expect(problems).toEqual([`failed:${(await store.listWaMessages(l.id))[0].id}`]);
     // A failed message does not count as having reached the lead.
     expect((await store.leadsContactedOnWhatsApp([l.id])).size).toBe(0);
   });
@@ -158,8 +160,9 @@ describe("delivery receipts", () => {
 
   async function sentMessage() {
     await allOn();
-    const { lead } = await captureLead(store, { source: "meta", phone: BUYER, autoWhatsApp: true });
-    const r = await gated.sendText(BUYER, "Hi", { leadId: lead.id });
+    const { lead } = await captureLead(store, { source: "meta", phone: BUYER });
+    await store.updateLead(lead.id, { wa_auto_allowed: true });
+    const r = await gated.sendText(BUYER, "Hi", { leadId: lead.id, sendKey: "t:1" });
     return r.wamid!;
   }
 
@@ -244,19 +247,19 @@ describe("Chetan's reply box", () => {
 
   it("refuses free text after the 24-hour window", async () => {
     const l = await leadWhoWrote(25);
-    const r = await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", clientRef: "a" }, NOW);
+    const r = await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", sendKey: "a" }, NOW);
     expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/24 hours/) });
     expect(await store.listWaMessages(l.id)).toHaveLength(0);
   });
 
   it("refuses an empty message", async () => {
     const l = await leadWhoWrote(1);
-    expect(await sendManualReply(store, cfg(), { leadId: l.id, body: "   ", clientRef: "a" }, NOW)).toMatchObject({ ok: false });
+    expect(await sendManualReply(store, cfg(), { leadId: l.id, body: "   ", sendKey: "a" }, NOW)).toMatchObject({ ok: false });
   });
 
   it("says why when sending is switched off", async () => {
     const l = await leadWhoWrote(1);
-    const r = await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", clientRef: "a" }, NOW);
+    const r = await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", sendKey: "a" }, NOW);
     expect(r).toMatchObject({ ok: false, error: `Not sent: ${BLOCK.off}` });
     expect(meta.calls).toHaveLength(0);
   });
@@ -264,7 +267,7 @@ describe("Chetan's reply box", () => {
   it("sends with automation off and the lead not allowed, logs it on the card, and only once", async () => {
     await settings({ outbound_enabled: true, test_numbers: [BUYER] });
     const l = await leadWhoWrote(1);
-    const input = { leadId: l.id, body: "Sharing the brochure now", clientRef: "ref-9" };
+    const input = { leadId: l.id, body: "Sharing the brochure now", sendKey: "ref-9" };
     expect(await sendManualReply(store, cfg(), input, NOW)).toMatchObject({ ok: true, result: { status: "sent" } });
     expect(await sendManualReply(store, cfg(), input, NOW)).toMatchObject({ ok: true, result: { duplicate: true } });
     expect(meta.calls).toHaveLength(1);
@@ -275,7 +278,7 @@ describe("Chetan's reply box", () => {
 
   it("a resubmitted blocked reply is reported as not sent, never as sent", async () => {
     const l = await leadWhoWrote(1);
-    const input = { leadId: l.id, body: "Hi", clientRef: "same" };
+    const input = { leadId: l.id, body: "Hi", sendKey: "same" };
     await sendManualReply(store, cfg(), input, NOW);
     expect(await sendManualReply(store, cfg(), input, NOW)).toMatchObject({ ok: false, error: `Not sent: ${BLOCK.off}` });
   });
@@ -283,7 +286,7 @@ describe("Chetan's reply box", () => {
   it("in test mode cannot reach a number off the list", async () => {
     await settings({ outbound_enabled: true, test_numbers: [OTHER] });
     const l = await leadWhoWrote(1);
-    expect(await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", clientRef: "b" }, NOW)).toMatchObject({
+    expect(await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", sendKey: "b" }, NOW)).toMatchObject({
       ok: false,
       error: `Not sent: ${BLOCK.testMode}`,
     });
@@ -355,7 +358,7 @@ describe("review fixes: one submission can never reach Meta twice", () => {
     meta.onCall = async () => {
       meta.logAtCall.push(...(await store.listWaMessages(l.id)).map((m) => m.status));
     };
-    await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", clientRef: "r1" }, NOW);
+    await sendManualReply(store, cfg(), { leadId: l.id, body: "Hi", sendKey: "r1" }, NOW);
     expect(meta.logAtCall).toEqual(["sending"]);
     expect((await store.listWaMessages(l.id)).map((m) => m.status)).toEqual(["sent"]);
   });
@@ -363,7 +366,7 @@ describe("review fixes: one submission can never reach Meta twice", () => {
   it("two simultaneous submissions of the same form call Meta once", async () => {
     const l = await openLead();
     meta.delay = 30;
-    const input = { leadId: l.id, body: "Brochure attached", clientRef: "same-click" };
+    const input = { leadId: l.id, body: "Brochure attached", sendKey: "same-click" };
     const results = await Promise.all([1, 2, 3].map(() => sendManualReply(store, cfg(), input, NOW)));
     expect(meta.calls).toHaveLength(1);
     expect(results.filter((r) => r.ok && !r.result.duplicate)).toHaveLength(1);
@@ -375,8 +378,8 @@ describe("review fixes: one submission can never reach Meta twice", () => {
 
   it("a different form submission is a separate message", async () => {
     const l = await openLead();
-    await sendManualReply(store, cfg(), { leadId: l.id, body: "One", clientRef: "a" }, NOW);
-    await sendManualReply(store, cfg(), { leadId: l.id, body: "Two", clientRef: "b" }, NOW);
+    await sendManualReply(store, cfg(), { leadId: l.id, body: "One", sendKey: "a" }, NOW);
+    await sendManualReply(store, cfg(), { leadId: l.id, body: "Two", sendKey: "b" }, NOW);
     expect(meta.calls).toHaveLength(2);
   });
 });
@@ -389,8 +392,9 @@ describe("review fixes: accepted by Meta, then failed", () => {
   it("flags the lead, alerts Chetan once, pauses automation for the lead, and resends nothing", async () => {
     await allOn();
     const cfg: CatcherConfig = { sender: gated, chetanPhone: CHETAN, openerTemplate: null, alertTemplate: null, canAutomate: (l) => canAutomate(store, l) };
-    const { lead } = await captureLead(store, { source: "meta", phone: BUYER, name: "Ravi", autoWhatsApp: true });
-    const sent = await gated.sendText(BUYER, "Hi Ravi", { leadId: lead.id });
+    const { lead } = await captureLead(store, { source: "meta", phone: BUYER, name: "Ravi" });
+    await store.updateLead(lead.id, { wa_auto_allowed: true });
+    const sent = await gated.sendText(BUYER, "Hi Ravi", { leadId: lead.id, sendKey: "t:1" });
     expect(sent.status).toBe("sent");
     const toBuyer = () => meta.calls.filter((c) => c.to === BUYER).length;
     const toChetan = () => meta.calls.filter((c) => c.to === CHETAN).length;
@@ -425,7 +429,7 @@ describe("review fixes: the existing leads stay out of automation", () => {
     // As after the migration: every existing row has wa_auto_allowed = false.
     for (const phone of phones) await captureLead(store, { source: "other", phone, name: "Old lead" });
     // Some come back in through a Meta form and through WhatsApp.
-    for (const phone of phones.slice(0, 5)) await captureLead(store, { source: "meta", phone, autoWhatsApp: true });
+    for (const phone of phones.slice(0, 5)) await captureLead(store, { source: "meta", phone });
     for (const [i, phone] of phones.slice(5, 10).entries()) {
       await handleInbound(store, cfg, { id: `wamid.old.${i}`, from: phone, name: "Old lead", text: "Hi, still looking", timestamp: new Date().toISOString(), kind: "text" });
     }
@@ -460,6 +464,6 @@ describe("review fixes: the migration", () => {
   });
 
   it("allows every status the code writes", () => {
-    for (const s of ["received", "sending", "blocked", "dry_run", "sent", "delivered", "read", "failed"]) expect(sql).toContain(`'${s}'`);
+    for (const s of ["received", "sending", "blocked", "dry_run", "sent", "delivered", "read", "failed", "uncertain"]) expect(sql).toContain(`'${s}'`);
   });
 });

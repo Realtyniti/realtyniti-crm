@@ -56,10 +56,18 @@ export interface Store {
   listSpend(): Promise<ChannelSpend[]>;
   upsertSpend(s: ChannelSpend): Promise<ChannelSpend>;
 
-  /** WhatsApp message log. addWaMessage returns null when the wamid or client_ref is already stored (duplicate). */
+  /** WhatsApp message log. addWaMessage returns null when the wamid or send_key is already stored (duplicate). */
   addWaMessage(m: NewWaMessage): Promise<WaMessage | null>;
-  findWaMessage(by: { wamid?: string; clientRef?: string }): Promise<WaMessage | null>;
+  findWaMessage(by: { wamid?: string; sendKey?: string }): Promise<WaMessage | null>;
   updateWaMessage(id: string, patch: Partial<Pick<WaMessage, "status" | "error" | "wamid" | "lead_id">>): Promise<WaMessage>;
+  /**
+   * Changes a message only if its status is still one of `from` (an atomic compare-and-set).
+   * Returns null when another request changed it first, so a repeated webhook or an overlapping
+   * cron run cannot act on the same change twice.
+   */
+  updateWaMessageIf(id: string, from: WaMessage["status"][], patch: Partial<Pick<WaMessage, "status" | "error" | "wamid">>): Promise<WaMessage | null>;
+  /** Outgoing messages still marked "sending" that were reserved before `before` (the send never finished). */
+  listStuckSending(before: string): Promise<WaMessage[]>;
   listWaMessages(leadId: string): Promise<WaMessage[]>;
   /** Lead ids (of those given) that have at least one outbound WhatsApp message Meta accepted (sent, delivered or read). */
   leadsContactedOnWhatsApp(leadIds: string[]): Promise<Set<string>>;

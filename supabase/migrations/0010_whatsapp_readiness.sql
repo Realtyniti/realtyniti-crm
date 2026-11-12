@@ -1,8 +1,9 @@
 -- WhatsApp readiness (Stage 1). Additive only: no existing row is edited or deleted.
 --
 -- 1. leads.wa_auto_allowed: automatic WhatsApp messages need Chetan's per-lead OK.
---    Every existing lead gets false, so none of them can receive an automatic message
---    (bot reply, opener, follow-up, reminder) until Chetan switches it on for that lead.
+--    Every existing lead gets false, and so does every new lead (the app never sets it on
+--    its own), so no lead receives an automatic message (bot reply, opener, follow-up,
+--    reminder) until Chetan switches it on for that lead.
 -- 2. wa_messages: every WhatsApp message in or out, with Meta's message id and delivery status.
 -- 3. whatsapp_settings: the global switches. The one row starts with everything off.
 
@@ -18,17 +19,21 @@ create table wa_messages (
   kind text not null default 'text' check (kind in ('text', 'template', 'media')),
   body text not null,
   template_name text,
-  -- sending: reserved before Meta is called, so a form submitted twice can only call Meta once.
-  status text not null check (status in ('received', 'sending', 'blocked', 'dry_run', 'sent', 'delivered', 'read', 'failed')),
+  -- sending: reserved before Meta is called. uncertain: no clear or recorded answer from Meta;
+  -- never retried, flagged for Chetan.
+  status text not null check (status in ('received', 'sending', 'blocked', 'dry_run', 'sent', 'delivered', 'read', 'failed', 'uncertain')),
   error text,
   actor text not null check (actor in ('chetan', 'bot', 'system', 'buyer')),
   automated boolean not null default false,
-  -- One-time id from the reply form: a double click or a resubmit cannot send twice.
-  client_ref text unique,
+  -- The message's stable identity (e.g. in:<wamid>:question.budget, followup:<lead>:<due>,
+  -- manual:<form id>). Unique, and written before Meta is called: a repeated webhook, an
+  -- overlapping cron run or a double click cannot send the same message twice.
+  send_key text unique,
   created_at timestamptz not null default now(),
   status_at timestamptz
 );
 create index wa_messages_lead_idx on wa_messages (lead_id, created_at);
+create index wa_messages_sending_idx on wa_messages (created_at) where status = 'sending';
 create index wa_messages_contacted_idx on wa_messages (lead_id) where direction = 'out' and status in ('sent', 'delivered', 'read');
 
 create table whatsapp_settings (

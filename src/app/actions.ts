@@ -262,7 +262,7 @@ export async function sendWhatsAppReplyAction(leadId: string, _: ActionState, fd
   const r = await sendManualReply(store, catcherConfig(), {
     leadId,
     body: String(fd.get("body") ?? ""),
-    clientRef: str(fd, "client_ref"),
+    sendKey: str(fd, "client_ref"),
   });
   revalidatePath(`/leads/${leadId}`);
   if (!r.ok) return { error: r.error };

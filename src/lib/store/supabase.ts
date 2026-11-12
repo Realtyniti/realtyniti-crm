@@ -179,16 +179,16 @@ export class SupabaseStore implements Store {
   }
   async addWaMessage(m: NewWaMessage) {
     const { data, error } = await this.db.from("wa_messages").insert(m).select().single();
-    // 23505 = unique violation on wamid or client_ref: the same message arrived (or was submitted) twice.
+    // 23505 = unique violation on wamid or send_key: the same message arrived (or was submitted) twice.
     if (error?.code === "23505") return null;
     if (error) throw new Error(error.message);
     return data as WaMessage;
   }
 
-  async findWaMessage(by: { wamid?: string; clientRef?: string }) {
-    if (!by.wamid && !by.clientRef) return null;
+  async findWaMessage(by: { wamid?: string; sendKey?: string }) {
+    if (!by.wamid && !by.sendKey) return null;
     let q = this.db.from("wa_messages").select("*");
-    q = by.wamid ? q.eq("wamid", by.wamid) : q.eq("client_ref", by.clientRef!);
+    q = by.wamid ? q.eq("wamid", by.wamid) : q.eq("send_key", by.sendKey!);
     return one<WaMessage>(await q.maybeSingle());
   }
 
@@ -196,6 +196,23 @@ export class SupabaseStore implements Store {
     return must<WaMessage>(
       await this.db.from("wa_messages").update({ ...patch, status_at: new Date().toISOString() }).eq("id", id).select().single(),
     );
+  }
+
+  async updateWaMessageIf(id: string, from: WaMessage["status"][], patch: Partial<Pick<WaMessage, "status" | "error" | "wamid">>) {
+    // One UPDATE ... WHERE id = $1 AND status IN (...): Postgres applies it atomically, so only one caller wins.
+    return one<WaMessage>(
+      await this.db
+        .from("wa_messages")
+        .update({ ...patch, status_at: new Date().toISOString() })
+        .eq("id", id)
+        .in("status", from)
+        .select()
+        .maybeSingle(),
+    );
+  }
+
+  async listStuckSending(before: string) {
+    return many<WaMessage>(await this.db.from("wa_messages").select("*").eq("status", "sending").lt("created_at", before).limit(200));
   }
 
   async listWaMessages(leadId: string) {

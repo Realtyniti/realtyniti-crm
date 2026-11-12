@@ -219,16 +219,16 @@ export class MemoryStore implements Store {
   }
   async addWaMessage(m: NewWaMessage) {
     if (m.wamid && this.waMessages.some((x) => x.wamid === m.wamid)) return null;
-    if (m.client_ref && this.waMessages.some((x) => x.client_ref === m.client_ref)) return null;
+    if (m.send_key && this.waMessages.some((x) => x.send_key === m.send_key)) return null;
     const now = new Date().toISOString();
     const row: WaMessage = { ...m, id: randomUUID(), created_at: m.created_at ?? now, status_at: now };
     this.waMessages.push(row);
     return row;
   }
 
-  async findWaMessage(by: { wamid?: string; clientRef?: string }) {
+  async findWaMessage(by: { wamid?: string; sendKey?: string }) {
     return (
-      this.waMessages.find((m) => (by.wamid && m.wamid === by.wamid) || (by.clientRef && m.client_ref === by.clientRef)) ?? null
+      this.waMessages.find((m) => (by.wamid && m.wamid === by.wamid) || (by.sendKey && m.send_key === by.sendKey)) ?? null
     );
   }
 
@@ -237,6 +237,17 @@ export class MemoryStore implements Store {
     if (i < 0) throw new Error(`wa message ${id} not found`);
     this.waMessages[i] = { ...this.waMessages[i], ...patch, status_at: new Date().toISOString() };
     return this.waMessages[i];
+  }
+
+  async updateWaMessageIf(id: string, from: WaMessage["status"][], patch: Partial<Pick<WaMessage, "status" | "error" | "wamid">>) {
+    const i = this.waMessages.findIndex((m) => m.id === id);
+    if (i < 0 || !from.includes(this.waMessages[i].status)) return null;
+    this.waMessages[i] = { ...this.waMessages[i], ...patch, status_at: new Date().toISOString() };
+    return this.waMessages[i];
+  }
+
+  async listStuckSending(before: string) {
+    return this.waMessages.filter((m) => m.status === "sending" && m.created_at < before);
   }
 
   async listWaMessages(leadId: string) {
