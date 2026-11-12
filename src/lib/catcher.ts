@@ -35,11 +35,18 @@ export interface CatcherConfig {
 }
 
 /** Writes what happened to an outgoing message on the card. Returns true when it went out. */
+/** Adds a flag to the lead's timeline unless the same flag is already there. */
+export async function addFlagOnce(store: Store, leadId: string, body: string): Promise<void> {
+  if ((await store.listEvents(leadId)).some((e) => e.kind === "flag" && e.body === body)) return;
+  await store.addEvent({ lead_id: leadId, kind: "flag", channel: "whatsapp", body });
+}
+
 async function recordSend(store: Store, lead: Lead, r: SendResult, what: string): Promise<boolean> {
   // Already sent (or being sent) by an earlier trigger of the same message: nothing new to record.
   if (r.duplicate) return false;
   if (r.status === "blocked") {
-    await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `Not sent: ${r.error ?? "blocked"} (${what.slice(0, 80)})` });
+    // A retried job (e.g. a reminder kept pending while sending is off) does not repeat the same flag.
+    await addFlagOnce(store, lead.id, `Not sent: ${r.error ?? "blocked"} (${what.slice(0, 80)})`);
     return false;
   }
   // Failed or uncertain: the send gate has already flagged the lead for Chetan and alerted him (once).
@@ -101,6 +108,23 @@ export async function sendApproved(
   trigger: string,
   vars: Record<string, string | null | undefined> = {},
 ): Promise<boolean> {
+  const r = await sendApprovedResult(store, cfg, lead, key, trigger, vars);
+  return !!r && !r.duplicate && (r.status === "sent" || r.status === "dry_run");
+}
+
+/**
+ * Like sendApproved, but returns WhatsApp's result (null when the template is missing or not
+ * approved), so a caller can tell "sent", "blocked, try later", "failed or uncertain" and
+ * "already sent by another run" apart.
+ */
+export async function sendApprovedResult(
+  store: Store,
+  cfg: CatcherConfig,
+  lead: Lead,
+  key: string,
+  trigger: string,
+  vars: Record<string, string | null | undefined> = {},
+): Promise<SendResult | null> {
   const t = await store.getTemplate(key);
   let text: string;
   try {
@@ -108,13 +132,12 @@ export async function sendApproved(
     text = renderForSending(t, { name: lead.name?.split(" ")[0], micro_market: lead.micro_market, brand: lead.brand, ...vars });
   } catch (e) {
     if (!(e instanceof TemplateError)) throw e;
-    await store.addEvent({ lead_id: lead.id, kind: "flag", channel: "whatsapp", body: `Not sent: ${e.message}` });
-    return false;
+    await addFlagOnce(store, lead.id, `Not sent: ${e.message}`);
+    return null;
   }
   const r = await cfg.sender.sendText(lead.phone, text, { leadId: lead.id, automated: true, actor: "bot", sendKey: `${trigger}:${key}` });
-  if (!(await recordSend(store, lead, r, text))) return false;
-  if (!lead.first_reply_at) await store.updateLead(lead.id, { first_reply_at: new Date().toISOString() });
-  return true;
+  if ((await recordSend(store, lead, r, text)) && !lead.first_reply_at) await store.updateLead(lead.id, { first_reply_at: new Date().toISOString() });
+  return r;
 }
 
 export function requirementLine(l: Lead): string {

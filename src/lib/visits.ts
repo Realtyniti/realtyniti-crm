@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { alertChetan, sendApproved, type CatcherConfig } from "./catcher";
+import { addFlagOnce, alertChetan, sendApprovedResult, type CatcherConfig } from "./catcher";
 import { classify } from "./intake-sop";
 import { LeadError } from "./leads";
 import type { Store } from "./store/types";
@@ -126,24 +126,45 @@ export async function bookVisit(
   return { visit, slot, rescheduled };
 }
 
-/** Free text only inside WhatsApp's 24-hour window; otherwise Chetan is told to message them. */
-async function sendVisitMessage(store: Store, cfg: CatcherConfig, lead: Lead, slot: VisitSlot, key: string, trigger: string, now = new Date()) {
+/**
+ * What happened to a visit message:
+ *  sent     WhatsApp accepted it (or dry run), now or in an earlier run: the reminder is done.
+ *  pending  not sent and nothing reserved (switches off, test mode, template not approved, 24-hour
+ *           window closed, or another run is sending it right now): stays due and is tried again.
+ *  review   refused or unconfirmed: the lead is flagged for Chetan; the reserved send key means it
+ *           is never sent again automatically.
+ */
+type VisitOutcome = "sent" | "pending" | "review";
+
+/** Free text only inside WhatsApp's 24-hour window; otherwise Chetan is told (once) to message them. */
+async function sendVisitMessage(
+  store: Store,
+  cfg: CatcherConfig,
+  lead: Lead,
+  slot: VisitSlot,
+  key: string,
+  trigger: string,
+  now = new Date(),
+): Promise<VisitOutcome> {
   if (!windowOpen(lead.last_inbound_at, now)) {
-    await store.addEvent({
-      lead_id: lead.id,
-      kind: "flag",
-      channel: "whatsapp",
-      body: `"${key}" not sent: the buyer has not messaged in the last 24 hours, so WhatsApp only allows a registered template. Message them yourself.`,
-    });
-    return false;
+    await addFlagOnce(
+      store,
+      lead.id,
+      `"${key}" not sent: the buyer has not messaged in the last 24 hours, so WhatsApp only allows a registered template. Message them yourself.`,
+    );
+    return "pending";
   }
-  return sendApproved(store, cfg, lead, key, trigger, {
+  const r = await sendApprovedResult(store, cfg, lead, key, trigger, {
     when: formatSlot(slot),
     area: slot.area,
     address: slot.address,
     map_url: slot.map_url,
     booking_link: cfg.bookingUrl?.(lead.id),
   });
+  if (!r) return "pending";
+  if (r.status === "sent" || r.status === "dry_run") return "sent";
+  if (r.status === "failed" || r.status === "uncertain") return "review";
+  return "pending"; // blocked, or "sending" in an overlapping run, which marks it done itself
 }
 
 export async function setVisitStatus(store: Store, visitId: string, leadId: string, status: SiteVisit["status"]) {
@@ -167,14 +188,20 @@ export async function sendDueReminders(store: Store, cfg: CatcherConfig, now = n
     for (const v of slot.booked) {
       const lead = await store.getLead(v.lead_id);
       if (!lead) continue;
+      // A reminder is marked done only once WhatsApp has accepted it. Blocked or not-yet-possible
+      // reminders stay due for the next run; refused or unconfirmed ones are with Chetan and are
+      // never resent (their send key stays reserved). Overlapping runs share the send key, so
+      // only one of them can send.
       if (!v.reminder_2h_sent_at && hoursAway <= 2 && hoursAway > 0) {
-        await sendVisitMessage(store, cfg, lead, slot, "visit.reminder_2h", `visit:${v.id}`, now);
-        await store.updateVisit(v.id, { reminder_2h_sent_at: now.toISOString() });
-        sent++;
+        if ((await sendVisitMessage(store, cfg, lead, slot, "visit.reminder_2h", `visit:${v.id}`, now)) === "sent") {
+          await store.updateVisit(v.id, { reminder_2h_sent_at: now.toISOString() });
+          sent++;
+        }
       } else if (!v.reminder_evening_sent_at && !v.reminder_2h_sent_at && hoursAway > 2 && istDay(start) === tomorrow && istHour >= 18) {
-        await sendVisitMessage(store, cfg, lead, slot, "visit.reminder_evening", `visit:${v.id}`, now);
-        await store.updateVisit(v.id, { reminder_evening_sent_at: now.toISOString() });
-        sent++;
+        if ((await sendVisitMessage(store, cfg, lead, slot, "visit.reminder_evening", `visit:${v.id}`, now)) === "sent") {
+          await store.updateVisit(v.id, { reminder_evening_sent_at: now.toISOString() });
+          sent++;
+        }
       }
     }
   }

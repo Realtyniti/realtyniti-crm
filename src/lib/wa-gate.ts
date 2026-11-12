@@ -164,23 +164,34 @@ function duplicateOf(seen: WaMessage): SendResult {
   return { status, wamid: seen.wamid, error: seen.error, duplicate: true };
 }
 
-const RANK: Record<string, number> = { blocked: 0, dry_run: 0, sending: 1, uncertain: 1, failed: 1, sent: 2, delivered: 3, read: 4 };
+/** Forward order of delivery receipts. "failed" is not on it: a failed message stays failed. */
+const RANK: Record<string, number> = { blocked: 0, dry_run: 0, sending: 1, uncertain: 1, sent: 2, delivered: 3, read: 4 };
 
 /**
- * A delivery receipt from Meta. Statuses only move forward (sent, delivered, read), so a late
- * "sent" never overwrites "read". Every change is a compare-and-set on the status read, so when
- * Meta delivers the same receipt twice at once only one of them counts. `newlyFailed` is true for
- * exactly one caller per failed message.
+ * A delivery receipt from Meta. Statuses only move forward (sent, delivered, read), and failed is
+ * final: nothing overwrites it. Every change is a compare-and-set on the status just read, so
+ * repeated or concurrent receipts count once. `newlyFailed` is true for exactly one caller per
+ * failed message.
  */
 export async function applyStatus(store: Store, u: StatusUpdate): Promise<{ message: WaMessage; newlyFailed: boolean } | null> {
-  const m = await store.findWaMessage({ wamid: u.wamid });
-  if (!m) return null;
-  if (u.status === "failed") {
-    if (m.status === "failed" || m.status === "delivered" || m.status === "read") return { message: m, newlyFailed: false };
-    const updated = await store.updateWaMessageIf(m.id, [m.status], { status: "failed", error: u.error });
-    return updated ? { message: updated, newlyFailed: true } : { message: m, newlyFailed: false };
+  // Read, decide, compare-and-set. If another receipt changed the status in between, the set
+  // matches nothing and we decide again on the fresh status, so concurrent receipts end in the
+  // same state whatever order they land in.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const m = await store.findWaMessage({ wamid: u.wamid });
+    if (!m) return null;
+    // Failed is final. A delayed sent, delivered or read receipt (Meta does not guarantee order)
+    // never overwrites it, so the failure and Chetan's review flag on the lead stay in place.
+    if (m.status === "failed") return { message: m, newlyFailed: false };
+    if (u.status === "failed") {
+      // A failure counts even after an earlier "delivered": when in doubt, Chetan reviews it.
+      const updated = await store.updateWaMessageIf(m.id, [m.status], { status: "failed", error: u.error });
+      if (updated) return { message: updated, newlyFailed: true };
+      continue;
+    }
+    if ((RANK[u.status] ?? 0) <= (RANK[m.status] ?? 0)) return { message: m, newlyFailed: false };
+    const updated = await store.updateWaMessageIf(m.id, [m.status], { status: u.status });
+    if (updated) return { message: updated, newlyFailed: false };
   }
-  if ((RANK[u.status] ?? 0) <= (RANK[m.status] ?? 0)) return { message: m, newlyFailed: false };
-  const updated = await store.updateWaMessageIf(m.id, [m.status], { status: u.status });
-  return { message: updated ?? m, newlyFailed: false };
+  return { message: (await store.findWaMessage({ wamid: u.wamid }))!, newlyFailed: false };
 }
