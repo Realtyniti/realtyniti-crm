@@ -9,6 +9,8 @@ export class MemoryStore implements Store {
   private leads = new Map<string, Lead>();
   private touches: LeadTouch[] = [];
   private events: LeadEvent[] = [];
+  /** Mirrors the unique lead_events.dedupe_key column. */
+  private eventKeys = new Set<string>();
   private templates = new Map<string, MessageTemplate>();
   private slots = new Map<string, VisitSlot>();
   private visits = new Map<string, SiteVisit>();
@@ -103,6 +105,15 @@ export class MemoryStore implements Store {
 
   async addEvent(event: Omit<LeadEvent, "id" | "created_at"> & { created_at?: string }) {
     const row: LeadEvent = { ...event, id: randomUUID(), created_at: event.created_at ?? new Date().toISOString() };
+    this.events.push(row);
+    return row;
+  }
+
+  async addEventOnce(event: Omit<LeadEvent, "id" | "created_at">, key: string) {
+    // Check and insert with no await in between: atomic within this process, like the unique index.
+    if (this.eventKeys.has(key)) return null;
+    this.eventKeys.add(key);
+    const row: LeadEvent = { ...event, id: randomUUID(), created_at: new Date().toISOString() };
     this.events.push(row);
     return row;
   }

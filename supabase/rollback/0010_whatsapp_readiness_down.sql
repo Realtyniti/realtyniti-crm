@@ -5,7 +5,8 @@
 -- once the old deployment is live.
 --
 -- What is lost: the WhatsApp message log (wa_messages), the switches (whatsapp_settings), and
--- every per-lead "allow automatic WhatsApp" choice. No other lead data is touched.
+-- every per-lead "allow automatic WhatsApp" choice, and the dedupe keys on timeline flags
+-- (the flags themselves stay). No other lead data is touched.
 -- Optional: keep a copy of the log first:
 --   create table wa_messages_backup as table wa_messages;
 
@@ -13,4 +14,5 @@ begin;
 drop table if exists wa_messages;
 drop table if exists whatsapp_settings;
 alter table leads drop column if exists wa_auto_allowed;
+alter table lead_events drop column if exists dedupe_key;
 commit;

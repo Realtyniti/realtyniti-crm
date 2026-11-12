@@ -33,6 +33,12 @@ export interface Store {
   listTouches(leadId: string): Promise<LeadTouch[]>;
 
   addEvent(event: Omit<LeadEvent, "id" | "created_at"> & { created_at?: string }): Promise<LeadEvent>;
+  /**
+   * Adds the event only if no event with this key exists, in one atomic step (a unique key in the
+   * database, not a read-then-insert). Returns null when it already existed, so overlapping runs
+   * that both try to add the same flag create exactly one.
+   */
+  addEventOnce(event: Omit<LeadEvent, "id" | "created_at">, key: string): Promise<LeadEvent | null>;
   listEvents(leadId: string): Promise<LeadEvent[]>;
 
   listTemplates(): Promise<MessageTemplate[]>;

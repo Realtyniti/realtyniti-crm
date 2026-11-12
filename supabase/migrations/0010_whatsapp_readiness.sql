@@ -6,8 +6,13 @@
 --    reminder) until Chetan switches it on for that lead.
 -- 2. wa_messages: every WhatsApp message in or out, with Meta's message id and delivery status.
 -- 3. whatsapp_settings: the global switches. The one row starts with everything off.
+-- 4. lead_events.dedupe_key: lets a repeated job (e.g. an hourly reminder kept pending while
+--    sending is off) add its timeline flag exactly once. Existing events get null and are unchanged.
 
 alter table leads add column wa_auto_allowed boolean not null default false;
+
+-- Nullable, no default: existing rows are not rewritten. Unique ignores nulls, so only keyed events are constrained.
+alter table lead_events add column dedupe_key text unique;
 
 create table wa_messages (
   id uuid primary key default gen_random_uuid(),

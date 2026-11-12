@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { classify, QUALIFYING_QUESTIONS, type QuestionKey } from "./intake-sop";
 import { captureLead, closeLead, updateRequirement } from "./leads";
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "./parse";
@@ -35,10 +36,14 @@ export interface CatcherConfig {
 }
 
 /** Writes what happened to an outgoing message on the card. Returns true when it went out. */
-/** Adds a flag to the lead's timeline unless the same flag is already there. */
+/**
+ * Adds a flag to the lead's timeline once. The flag's key is the lead plus a hash of its text, and
+ * the store inserts it atomically against a unique key, so repeated hourly runs and overlapping
+ * cron runs of the same blocked message create exactly one flag.
+ */
 export async function addFlagOnce(store: Store, leadId: string, body: string): Promise<void> {
-  if ((await store.listEvents(leadId)).some((e) => e.kind === "flag" && e.body === body)) return;
-  await store.addEvent({ lead_id: leadId, kind: "flag", channel: "whatsapp", body });
+  const key = `flag:${leadId}:${createHash("sha256").update(body).digest("hex").slice(0, 32)}`;
+  await store.addEventOnce({ lead_id: leadId, kind: "flag", channel: "whatsapp", body }, key);
 }
 
 async function recordSend(store: Store, lead: Lead, r: SendResult, what: string): Promise<boolean> {

@@ -100,6 +100,14 @@ export class SupabaseStore implements Store {
     return must<LeadEvent>(await this.db.from("lead_events").insert(event).select().single());
   }
 
+  async addEventOnce(event: Omit<LeadEvent, "id" | "created_at">, key: string) {
+    // dedupe_key is unique: Postgres accepts one insert per key and rejects the rest (23505).
+    const { data, error } = await this.db.from("lead_events").insert({ ...event, dedupe_key: key }).select().single();
+    if (error?.code === "23505") return null;
+    if (error) throw new Error(error.message);
+    return data as LeadEvent;
+  }
+
   async listEvents(leadId: string) {
     return many<LeadEvent>(await this.db.from("lead_events").select("*").eq("lead_id", leadId).order("created_at"));
   }
