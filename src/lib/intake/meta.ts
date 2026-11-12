@@ -7,7 +7,8 @@ import type { LeadInput } from "../types";
  * with only an id; the answers are fetched from the Graph API.
  */
 
-export const GRAPH_API = "https://graph.facebook.com/v21.0";
+/** Meta Graph API version for WhatsApp and lead ads. v25.0 is supported until 29 Jul 2028 (v21.0 retired 21 Jan 2027). */
+export const GRAPH_API = "https://graph.facebook.com/v25.0";
 
 /** Checks the X-Hub-Signature-256 header Meta sends with every webhook. */
 export function verifyMetaSignature(rawBody: string, header: string | null, appSecret: string): boolean {

@@ -29,6 +29,16 @@ export function isDue(l: Lead, now: Date): boolean {
   );
 }
 
+/**
+ * Who the clock may message on its own. A follow-up only goes to a lead that:
+ *  - Chetan has allowed automatic WhatsApp messages for (none of the leads that existed before go-live), and
+ *  - has already had at least one WhatsApp message from us that Meta accepted.
+ * Everyone else who is due stays on Chetan's due list.
+ */
+export function eligibleForAutoFollowUp(l: Lead, contacted: Set<string>): boolean {
+  return l.wa_auto_allowed && contacted.has(l.id);
+}
+
 export interface ClockResult {
   sent: number;
   flagged: number;
@@ -41,7 +51,13 @@ export async function runFollowUpClock(store: Store, cfg: CatcherConfig, now = n
   const hour = istHour(now);
   if (hour < SEND_HOURS_IST.from || hour >= SEND_HOURS_IST.to) return result;
 
-  for (const lead of (await store.listLeads()).filter((l) => isDue(l, now))) {
+  const due = (await store.listLeads()).filter((l) => isDue(l, now));
+  const contacted = await store.leadsContactedOnWhatsApp(due.map((l) => l.id));
+  for (const lead of due) {
+    if (!eligibleForAutoFollowUp(lead, contacted) || (cfg.canAutomate && !(await cfg.canAutomate(lead)))) {
+      result.leftForChetan++;
+      continue;
+    }
     if (lead.followups_unanswered >= MAX_UNANSWERED) {
       await store.updateLead(lead.id, {
         needs_chetan: true,
@@ -57,18 +73,37 @@ export async function runFollowUpClock(store: Store, cfg: CatcherConfig, now = n
       continue;
     }
 
+    // The CRM follow-up template for this tag must be approved by Chetan, whichever way the message goes out.
+    const key = `followup.${lead.temperature ?? "warm"}`;
+    // This follow-up's identity is the lead and the due time it answers: overlapping or repeated
+    // clock runs see the same due time, so the database lets only one of them send it.
+    const trigger = `followup:${lead.id}:${lead.next_follow_up_at}`;
+    const approved = !!(await store.getTemplate(key))?.approved_at;
     let sent = false;
-    if (windowOpen(lead.last_inbound_at, now)) {
-      sent = await sendApproved(store, cfg, lead, `followup.${lead.temperature ?? "warm"}`);
+    if (!approved) {
+      sent = false;
+    } else if (windowOpen(lead.last_inbound_at, now)) {
+      sent = await sendApproved(store, cfg, lead, key, trigger);
     } else if (cfg.followupTemplate) {
-      await cfg.sender.sendTemplate(lead.phone, { ...cfg.followupTemplate, params: [lead.name?.split(" ")[0] ?? "there", lead.brand] });
+      const r = await cfg.sender.sendTemplate(
+        lead.phone,
+        { ...cfg.followupTemplate, params: [lead.name?.split(" ")[0] ?? "there", lead.brand] },
+        { leadId: lead.id, automated: true, actor: "bot", sendKey: `${trigger}:template` },
+      );
+      if (r.duplicate) {
+        // Another run already sent (or is sending) this follow-up; it moves the date on, not this one.
+        result.leftForChetan++;
+        continue;
+      }
+      sent = r.status === "sent" || r.status === "dry_run";
       await store.addEvent({
         lead_id: lead.id,
-        kind: "message_out",
+        kind: sent ? "message_out" : "flag",
         channel: "whatsapp",
-        body: `${cfg.sender.live ? "" : "[dry run] "}Sent follow-up template (${cfg.followupTemplate.name}).`,
+        body: sent
+          ? `${r.status === "sent" ? "" : "[dry run] "}Sent follow-up template (${cfg.followupTemplate.name}).`
+          : `Follow-up not sent: ${r.error ?? r.status}`,
       });
-      sent = true;
     }
 
     if (!sent) {

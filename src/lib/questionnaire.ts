@@ -7,6 +7,9 @@
  * when they need a line to say.
  */
 
+import type { QuestionKey } from "./intake-sop";
+import type { Purpose, Requirement } from "./types";
+
 export interface QuestionOption {
   value: string;
   label: string;
@@ -46,6 +49,19 @@ export interface Questionnaire {
 const opts = (...labels: string[]): QuestionOption[] =>
   labels.map((label) => ({ value: label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""), label }));
 
+/**
+ * The areas both assistants offer, in one place. `stored` is what goes on the lead card
+ * (the same names the WhatsApp parser produces, so filters and reports match).
+ */
+export const AREAS: { label: string; stored: string }[] = [
+  { label: "Noida", stored: "Noida" },
+  { label: "Noida Extension / Greater Noida West", stored: "Greater Noida West" },
+  { label: "Greater Noida", stored: "Greater Noida" },
+  { label: "Yamuna Expressway", stored: "Yamuna Expressway" },
+  { label: "Ghaziabad", stored: "Ghaziabad" },
+  { label: "Delhi NCR", stored: "Delhi NCR" },
+];
+
 const NOT_INTERESTED_REASONS = opts("Budget mismatch", "Location", "Already bought", "Just exploring", "Bad timing", "Other");
 
 export const QUESTIONNAIRE_V1: Questionnaire = {
@@ -59,7 +75,7 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           key: "property_type",
           label: "What type of property are you looking for?",
           multi: true,
-          options: opts("1BHK", "2BHK", "3BHK", "4BHK", "Villa", "Independent Floor", "Plot"),
+          options: opts("1BHK", "2BHK", "3BHK", "4BHK", "Villa", "Independent Floor", "Plot", "Studio", "Commercial"),
           allowOther: true,
           script:
             "Sir/Ma'am, aap kis type ki property dekh rahe hain? 2BHK, 3BHK, ya koi villa ya plot, taaki main aapko sahi options dikha sakun?",
@@ -77,10 +93,10 @@ export const QUESTIONNAIRE_V1: Questionnaire = {
           key: "location",
           label: "Which location do you prefer?",
           multi: true,
-          options: opts("Noida Extension", "Greater Noida", "Noida", "Ghaziabad", "Delhi NCR"),
+          options: opts(...AREAS.map((a) => a.label)),
           allowOther: true,
           script:
-            "Aapko kaunsa area zyada convenient lagega? Noida Extension, Greater Noida, Noida ya Ghaziabad? Office ya family ke hisaab se koi preference hai?",
+            "Aapko kaunsa area zyada convenient lagega? Noida, Noida Extension, Greater Noida, Yamuna Expressway ya Ghaziabad? Office ya family ke hisaab se koi preference hai?",
         },
         {
           key: "possession",
@@ -196,4 +212,78 @@ export interface Answer {
 
 export function isAnswered(a: Answer | undefined): boolean {
   return !!a && (a.skipped || a.values.length > 0 || !!a.other?.trim());
+}
+
+/*
+ * One question bank for both assistants. The WhatsApp Lead Catcher asks the five
+ * qualifying questions in intake-sop.ts; each one is the same question as a calling
+ * question below, and both write the same fields on the lead card.
+ * WhatsApp template keys stay "question.<WhatsApp key>" (e.g. question.micro_market),
+ * so the templates Chetan already approved keep working.
+ */
+export const WHATSAPP_TO_CALL_KEY = {
+  budget: "budget",
+  micro_market: "location",
+  property_type: "property_type",
+  purpose: "purpose",
+  timeline: "timeline",
+} as const satisfies Record<QuestionKey, string>;
+
+const LAKH = 100_000;
+const BUDGET: Record<string, { min: number | null; max: number | null }> = {
+  below_45_lakhs: { min: null, max: 45 * LAKH },
+  "45_55_lakhs": { min: 45 * LAKH, max: 55 * LAKH },
+  "55_70_lakhs": { min: 55 * LAKH, max: 70 * LAKH },
+  "70_85_lakhs": { min: 70 * LAKH, max: 85 * LAKH },
+  "85_lakhs_1_crore": { min: 85 * LAKH, max: 100 * LAKH },
+  above_1_crore: { min: 100 * LAKH, max: null },
+};
+const TIMELINE: Record<string, number> = {
+  immediately: 1,
+  within_30_days: 1,
+  within_1_3_months: 3,
+  within_3_6_months: 6,
+  after_6_months: 12,
+  just_exploring: 12,
+};
+/** "Both" is stored as investment: the card has one purpose, and investment changes the pitch more. */
+const PURPOSE: Record<string, Purpose> = { self_use: "end_use", investment: "investment", both: "investment" };
+const VISIT_YES = new Set(["today", "tomorrow", "this_weekend", "next_week"]);
+
+function labelOf(questionKey: string, value: string): string | undefined {
+  for (const s of QUESTIONNAIRE_V1.sections) {
+    const q = s.questions.find((x) => x.key === questionKey);
+    if (q) return q.options.find((o) => o.value === value)?.label;
+  }
+  return undefined;
+}
+
+/**
+ * The lead-card fields a set of calling answers fills in: the same fields the WhatsApp
+ * Lead Catcher fills. Unanswered, skipped or "Other" answers leave a field alone.
+ */
+export function answersToRequirement(answers: Record<string, Answer | undefined>): Partial<Requirement> {
+  const out: Partial<Requirement> = {};
+  const first = (k: string) => {
+    const a = answers[k];
+    return a && !a.skipped ? a.values[0] : undefined;
+  };
+
+  const budget = first("budget");
+  if (budget && BUDGET[budget]) {
+    out.budget_min_inr = BUDGET[budget].min;
+    out.budget_max_inr = BUDGET[budget].max;
+  }
+  const loc = first("location");
+  const area = loc ? AREAS.find((a) => opts(a.label)[0].value === loc) : undefined;
+  if (area) out.micro_market = area.stored;
+  const type = first("property_type");
+  if (type) out.property_type = labelOf("property_type", type) ?? null;
+  const purpose = first("purpose");
+  if (purpose && PURPOSE[purpose]) out.purpose = PURPOSE[purpose];
+  const timeline = first("timeline");
+  if (timeline && TIMELINE[timeline] != null) out.timeline_months = TIMELINE[timeline];
+  const visit = first("site_visit");
+  if (visit && VISIT_YES.has(visit)) out.agreed_site_visit = true;
+  return out;
 }

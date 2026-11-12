@@ -10,6 +10,8 @@ import { acceptedPatch, FIGURE_LABEL, figureChanges, figuresFromForm, projectFro
 import { getStore } from "@/lib/store";
 import { isReadOnly, ReadOnlyError } from "@/lib/read-only";
 import { setVisitStatus } from "@/lib/visits";
+import { catcherConfig } from "@/lib/catcher-config";
+import { sendManualReply, setAutoWhatsApp, settingsFromForm } from "@/lib/wa-reply";
 import { LEAD_SOURCES, type LeadSource, type ProjectInput } from "@/lib/types";
 
 export interface ActionState {
@@ -252,4 +254,34 @@ export async function acceptFiguresAction(id: string, reply: Partial<ProjectInpu
   revalidatePath(`/projects/${id}`);
   revalidatePath("/projects");
   return { ok: accepted.length ? `Accepted ${accepted.length} change${accepted.length === 1 ? "" : "s"}; marked confirmed today.` : "No changes; marked confirmed today." };
+}
+
+export async function sendWhatsAppReplyAction(leadId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const store = getStore();
+  const r = await sendManualReply(store, catcherConfig(), {
+    leadId,
+    body: String(fd.get("body") ?? ""),
+    sendKey: str(fd, "client_ref"),
+  });
+  revalidatePath(`/leads/${leadId}`);
+  if (!r.ok) return { error: r.error };
+  if (r.result.duplicate) return { ok: r.result.status === "sending" ? "Already being sent." : "Already sent." };
+  return { ok: r.result.status === "dry_run" ? "Recorded as a dry run: WhatsApp is not connected." : "Sent." };
+}
+
+export async function setAutoWhatsAppAction(leadId: string, allowed: boolean) {
+  // Read-only preview: nothing to do; the banner says so.
+  if (isReadOnly()) return;
+  await setAutoWhatsApp(getStore(), leadId, allowed);
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function saveWhatsAppSettingsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const { patch, invalid } = settingsFromForm(fd);
+  if (invalid.length) return { error: `Not a valid phone number: ${invalid.join(", ")}` };
+  await getStore().updateWhatsAppSettings(patch);
+  revalidatePath("/whatsapp");
+  return { ok: "Saved." };
 }

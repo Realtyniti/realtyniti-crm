@@ -188,7 +188,7 @@ describe("helpers", () => {
       ],
     };
     expect(inboundMessages(body)).toEqual([
-      { id: "wamid.X", from: "+919876543210", name: "Ravi", text: "Hi", timestamp: new Date(1761480000 * 1000).toISOString() },
+      { id: "wamid.X", from: "+919876543210", name: "Ravi", text: "Hi", kind: "text", timestamp: new Date(1761480000 * 1000).toISOString() },
     ]);
   });
   it("digest", async () => {

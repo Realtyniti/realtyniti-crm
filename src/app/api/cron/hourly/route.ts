@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { catcherConfig } from "@/lib/catcher-config";
+import { sweepStuckSends } from "@/lib/catcher";
 import { runFollowUpClock } from "@/lib/followup-clock";
 import { getStore } from "@/lib/store";
 import { sendDueReminders } from "@/lib/visits";
@@ -17,5 +18,7 @@ export async function GET(req: Request) {
   const cfg = catcherConfig();
   const reminders = await sendDueReminders(store, cfg);
   const followups = await runFollowUpClock(store, cfg);
-  return NextResponse.json({ reminders, followups });
+  // Sends that never got a recorded answer become "uncertain" and go to Chetan for review.
+  const uncertain = await sweepStuckSends(store, cfg);
+  return NextResponse.json({ reminders, followups, uncertain });
 }

@@ -13,7 +13,7 @@ import {
   StickyNote,
   type LucideIcon,
 } from "lucide-react";
-import { addNoteAction, clearFlagAction, markFollowedUpAction } from "@/app/actions";
+import { addNoteAction, clearFlagAction, markFollowedUpAction, setAutoWhatsAppAction } from "@/app/actions";
 import { AssignAgent } from "@/components/assign-agent";
 import { Avatar, NameFlag, SOURCE_LABEL, StatusBadge, TemperatureBadge } from "@/components/badges";
 import { CallAssistant } from "@/components/calling/call-assistant";
@@ -35,9 +35,10 @@ import {
 } from "@/lib/lead-display";
 import { isReadOnly } from "@/lib/read-only";
 import { getStore } from "@/lib/store";
-import type { LeadEvent } from "@/lib/types";
+import type { LeadEvent, WaMessage } from "@/lib/types";
+import { windowOpen } from "@/lib/whatsapp";
 import { formatSlot } from "@/lib/visits";
-import { CloseLeadForm, EditLeadForm } from "./forms";
+import { CloseLeadForm, EditLeadForm, WhatsAppReplyForm } from "./forms";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,18 @@ const ASK_LABEL: Record<string, string> = {
   purpose: "purpose",
   timeline: "buying timeline",
 };
+const WA_STATUS: Record<WaMessage["status"], { label: string; tone: string }> = {
+  received: { label: "Received", tone: "bg-cold-soft text-cold" },
+  sending: { label: "Sending", tone: "bg-subtle text-muted" },
+  blocked: { label: "Not sent", tone: "bg-hot-soft text-hot" },
+  dry_run: { label: "Dry run", tone: "bg-subtle text-muted" },
+  sent: { label: "Sent", tone: "bg-subtle text-ink" },
+  delivered: { label: "Delivered", tone: "bg-wa-soft text-wa" },
+  read: { label: "Read", tone: "bg-wa-soft text-wa" },
+  failed: { label: "Failed", tone: "bg-hot-soft text-hot" },
+  uncertain: { label: "Unconfirmed", tone: "bg-warm-soft text-warm" },
+};
+const WA_ACTOR: Record<WaMessage["actor"], string> = { buyer: "Buyer", chetan: "Chetan", bot: "Automatic", system: "System" };
 const FOLLOW_LABEL = { overdue: "Overdue", today: "Due today", upcoming: "Upcoming" } as const;
 
 export default async function LeadDetailsPage({
@@ -86,7 +99,13 @@ export default async function LeadDetailsPage({
   const store = getStore();
   const lead = await store.getLead(id);
   if (!lead) notFound();
-  const [touches, events, visits] = await Promise.all([store.listTouches(id), store.listEvents(id), store.listVisits({ leadId: id })]);
+  const [touches, events, visits, waMessages, waSettings] = await Promise.all([
+    store.listTouches(id),
+    store.listEvents(id),
+    store.listVisits({ leadId: id }),
+    store.listWaMessages(id),
+    store.getWhatsAppSettings(),
+  ]);
   const visitSlots = await Promise.all(visits.map((v) => store.getSlot(v.slot_id)));
   const readOnly = isReadOnly();
   const bookingLink = bookingUrlFor(lead.id);
@@ -98,6 +117,8 @@ export default async function LeadDetailsPage({
   const fuState = followUpState(lead.next_follow_up_at);
   const dn = displayName(lead.name);
   const firstName = dn.name.split(" ")[0];
+  const replyWindow = windowOpen(lead.last_inbound_at);
+  const waLog = [...waMessages].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 30);
 
   const timeline: TimelineItem[] = [
     ...events.map((e): TimelineItem => ({
@@ -356,6 +377,47 @@ export default async function LeadDetailsPage({
               )}
             </div>
           </section>
+
+          {/* WhatsApp: Chetan's reply box and every message in or out with its delivery status. */}
+          <section className="panel">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <h2 className="eyebrow">WhatsApp</h2>
+              <span className={`text-[12.5px] ${replyWindow ? "text-wa" : "text-muted"}`}>
+                {replyWindow ? "Reply window open (24 hours from their last message)" : "Reply window closed"}
+              </span>
+            </div>
+            {!waSettings.outbound_enabled && (
+              <p className="mt-2 text-[12.5px] text-muted">
+                Sending is switched off in <Link href="/whatsapp" className="underline">WhatsApp settings</Link>, so a reply is logged as not sent.
+              </p>
+            )}
+            <div className="mt-3">
+              <WhatsAppReplyForm leadId={lead.id} windowOpen={replyWindow} disabled={readOnly || closed} />
+            </div>
+            <h3 className="eyebrow mt-5 border-t border-line pt-4">Message log</h3>
+            {waLog.length === 0 ? (
+              <p className="mt-1.5 text-[13.5px] text-muted">No WhatsApp messages with this lead yet.</p>
+            ) : (
+              <ul className="mt-2 space-y-2.5">
+                {waLog.map((m) => (
+                  <li key={m.id} className={`rounded-xl px-3.5 py-2.5 ${m.direction === "in" ? "bg-subtle" : "bg-wa-soft/60"}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-muted">
+                      <span className="font-medium">
+                        {m.direction === "in" ? "From buyer" : `To buyer · ${WA_ACTOR[m.actor]}`}
+                        {m.template_name ? ` · template ${m.template_name}` : ""}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${WA_STATUS[m.status].tone}`}>{WA_STATUS[m.status].label}</span>
+                        <time className="tabular-nums">{formatDateTime(m.status_at ?? m.created_at)}</time>
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap text-ink">{m.body}</p>
+                    {m.error && <p className="mt-1 text-[12px] text-hot">{m.error}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
 
         {/* Right rail: follow-up, then contact and visits, then the rarely used edits. */}
@@ -387,6 +449,27 @@ export default async function LeadDetailsPage({
                 )}
               </>
             )}
+          </section>
+
+          <section className="panel">
+            <h2 className="eyebrow">Automatic WhatsApp</h2>
+            <p className="mt-2 text-[13.5px]">
+              {lead.wa_auto_allowed ? (
+                <span className="font-semibold text-wa">Allowed for this lead</span>
+              ) : (
+                <span className="font-semibold text-muted">Not allowed</span>
+              )}
+            </p>
+            <p className="mt-1 text-[12.5px] text-muted">
+              {lead.wa_auto_allowed
+                ? "The bot may reply, and approved follow-ups may go out, while automation is switched on."
+                : "No bot reply, follow-up or reminder goes to this lead. Your own replies still work."}
+            </p>
+            <form action={setAutoWhatsAppAction.bind(null, lead.id, !lead.wa_auto_allowed)} className="mt-3">
+              <button className="btn-ghost h-9 w-full" disabled={readOnly}>
+                {lead.wa_auto_allowed ? "Stop automatic messages" : "Allow automatic messages"}
+              </button>
+            </form>
           </section>
 
           <section className="panel">

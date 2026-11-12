@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { handleInbound } from "@/lib/catcher";
+import { handleInbound, handleReceipt } from "@/lib/catcher";
 import { catcherConfig } from "@/lib/catcher-config";
 import { verifyMetaSignature } from "@/lib/intake/meta";
 import { getStore } from "@/lib/store";
-import { inboundMessages } from "@/lib/whatsapp";
+import { inboundMessages, statusUpdates } from "@/lib/whatsapp";
 
 /** Meta's one-time webhook verification handshake. */
 export function GET(req: Request) {
@@ -15,7 +15,7 @@ export function GET(req: Request) {
   return new Response("forbidden", { status: 403 });
 }
 
-/** Messages to the Realtyniti WhatsApp number. */
+/** Messages to the Realtyniti WhatsApp number, and delivery receipts for messages we sent. */
 export async function POST(req: Request) {
   const appSecret = process.env.META_APP_SECRET;
   if (!appSecret) return NextResponse.json({ error: "META_APP_SECRET not set" }, { status: 503 });
@@ -24,14 +24,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad signature" }, { status: 401 });
   }
 
+  const body = JSON.parse(raw);
   const store = getStore();
   const cfg = catcherConfig();
-  for (const msg of inboundMessages(JSON.parse(raw))) {
+  for (const msg of inboundMessages(body)) {
     try {
       await handleInbound(store, cfg, msg);
     } catch (e) {
       // Logged, not retried: the message is already on the card, and a retry could double-send.
       console.error("whatsapp inbound failed", msg.id, e);
+    }
+  }
+
+  for (const update of statusUpdates(body)) {
+    try {
+      // A message Meta accepted but later failed: flag the lead and alert Chetan once. Never resent.
+      await handleReceipt(store, cfg, update);
+    } catch (e) {
+      console.error("whatsapp status failed", update.wamid, e);
     }
   }
   return NextResponse.json({ ok: true });

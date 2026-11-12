@@ -50,6 +50,12 @@ export interface Lead extends Requirement {
   /** Follow-up Clock: messages sent since the buyer last replied. */
   followups_unanswered: number;
   last_followup_at: string | null;
+  /**
+   * Chetan allows automatic WhatsApp messages to this lead (bot replies, opener,
+   * follow-ups, reminders). Off for every lead that existed before WhatsApp went
+   * live and for imports; on for new live enquiries. Manual replies ignore it.
+   */
+  wa_auto_allowed: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -158,3 +164,55 @@ export interface ChannelSpend {
   month: string;
   amount_inr: number;
 }
+
+export type WaDirection = "in" | "out";
+/** received (inbound); blocked = stopped by the send gate before reaching Meta; dry_run = WhatsApp not connected. */
+/** sending: reserved in the log, waiting for Meta's answer. */
+/** uncertain: no clear answer from Meta, or no record of the answer; may or may not have been delivered. */
+export type WaStatus = "received" | "sending" | "blocked" | "dry_run" | "sent" | "delivered" | "read" | "failed" | "uncertain";
+
+/** Every WhatsApp message in or out, with Meta's message id and delivery status. */
+export interface WaMessage {
+  id: string;
+  lead_id: string | null;
+  /** Meta's message id (wamid). Unique; null when the message never reached Meta. */
+  wamid: string | null;
+  direction: WaDirection;
+  /** The buyer's (or Chetan's, for alerts) number, +91XXXXXXXXXX. */
+  phone: string;
+  kind: "text" | "template" | "media";
+  body: string;
+  template_name: string | null;
+  status: WaStatus;
+  /** Why a message was blocked or failed. */
+  error: string | null;
+  /** Who sent it: chetan (typed by hand), bot (automatic), system (alerts). */
+  actor: "chetan" | "bot" | "system" | "buyer";
+  automated: boolean;
+  /** One-time id from the reply form, so a double click cannot send twice. */
+  send_key: string | null;
+  created_at: string;
+  status_at: string | null;
+}
+
+export type NewWaMessage = Omit<WaMessage, "id" | "created_at" | "status_at"> & { created_at?: string };
+
+/** The global WhatsApp switches. Defaults are all safe: nothing leaves. */
+export interface WhatsAppSettings {
+  /** Master switch: when off, no WhatsApp message leaves the CRM at all, manual replies included. */
+  outbound_enabled: boolean;
+  /** When off, only messages Chetan types by hand (and alerts to Chetan) are sent. */
+  automation_enabled: boolean;
+  /** When on, messages go only to the numbers in test_numbers and to Chetan's own number. */
+  test_mode: boolean;
+  test_numbers: string[];
+  updated_at: string | null;
+}
+
+export const SAFE_WHATSAPP_SETTINGS: WhatsAppSettings = {
+  outbound_enabled: false,
+  automation_enabled: false,
+  test_mode: true,
+  test_numbers: [],
+  updated_at: null,
+};

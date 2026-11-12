@@ -13,11 +13,61 @@ export interface MetaTemplateRef {
   params: string[];
 }
 
+/** Who is sending and why. Omitted means an automatic message from the bot, the strictest case. */
+export interface SendContext {
+  leadId?: string | null;
+  /** True (the default) for anything the CRM sends on its own; false only for a reply Chetan typed. */
+  automated?: boolean;
+  actor?: "chetan" | "bot" | "system";
+  /**
+   * The message's stable identity, e.g. "in:<wamid>:question.budget", "followup:<lead>:<due time>",
+   * "manual:<form id>". Reserved in the database before Meta is called (unique), so the same logical
+   * message is sent at most once however many webhooks, cron runs or clicks trigger it.
+   * Required for every automatic message.
+   */
+  sendKey?: string | null;
+}
+
+export interface SendResult {
+  /**
+   * sent: Meta accepted it. dry_run: WhatsApp not connected. blocked: stopped by the send gate. failed: Meta refused it.
+   * uncertain: no clear answer from Meta (timeout, network error, server error), so it may or may not
+   * have been delivered. Never retried; Chetan is asked to check.
+   * sending: only on a duplicate, when the first attempt is still waiting for Meta.
+   */
+  status: "sent" | "dry_run" | "blocked" | "failed" | "uncertain" | "sending";
+  wamid: string | null;
+  error?: string | null;
+  /** The same reply form was submitted twice; nothing new was sent. */
+  duplicate?: boolean;
+}
+
+/** True when the message went out (or would have, in dry-run mode). */
+export const delivered = (r: SendResult) => r.status === "sent" || r.status === "dry_run";
+
+/**
+ * Why a send to Meta did not succeed.
+ * rejected: Meta answered with a 4xx error, so the message was definitely not accepted.
+ * uncertain: timeout, network failure, 5xx or an unreadable answer: Meta may have queued it.
+ */
+export class WhatsAppSendError extends Error {
+  constructor(
+    readonly kind: "rejected" | "uncertain",
+    message: string,
+  ) {
+    super(message);
+    this.name = "WhatsAppSendError";
+  }
+}
+
+/** How long to wait for Meta before treating the send as uncertain. */
+export const SEND_TIMEOUT_MS = 20_000;
+
 export interface WhatsAppSender {
   /** True when messages actually leave; false in dry-run (demo) mode. */
   readonly live: boolean;
-  sendText(to: string, body: string): Promise<string | null>;
-  sendTemplate(to: string, t: MetaTemplateRef): Promise<string | null>;
+  sendText(to: string, body: string, ctx?: SendContext): Promise<SendResult>;
+  sendTemplate(to: string, t: MetaTemplateRef, ctx?: SendContext): Promise<SendResult>;
 }
 
 export class CloudApiSender implements WhatsAppSender {
@@ -27,15 +77,29 @@ export class CloudApiSender implements WhatsAppSender {
     private token: string,
   ) {}
 
-  private async post(payload: object): Promise<string | null> {
-    const res = await fetch(`${GRAPH_API}/${this.phoneNumberId}/messages`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ messaging_product: "whatsapp", ...payload }),
-    });
-    if (!res.ok) throw new Error(`WhatsApp send failed ${res.status}: ${await res.text()}`);
-    const json = (await res.json()) as { messages?: { id: string }[] };
-    return json.messages?.[0]?.id ?? null;
+  private async post(payload: object): Promise<SendResult> {
+    let res: Response;
+    try {
+      res = await fetch(`${GRAPH_API}/${this.phoneNumberId}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", ...payload }),
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      });
+    } catch (e) {
+      throw new WhatsAppSendError("uncertain", `No answer from WhatsApp (${(e as Error).name === "TimeoutError" ? "timed out" : (e as Error).message})`);
+    }
+    const text = await res.text().catch(() => "");
+    if (res.status >= 400 && res.status < 500) throw new WhatsAppSendError("rejected", `WhatsApp refused it (${res.status}): ${text.slice(0, 300)}`);
+    if (!res.ok) throw new WhatsAppSendError("uncertain", `WhatsApp server error (${res.status}): ${text.slice(0, 300)}`);
+    let wamid: string | null = null;
+    try {
+      wamid = (JSON.parse(text) as { messages?: { id: string }[] }).messages?.[0]?.id ?? null;
+    } catch {
+      /* handled below */
+    }
+    if (!wamid) throw new WhatsAppSendError("uncertain", "WhatsApp answered without a message id");
+    return { status: "sent", wamid };
   }
 
   sendText(to: string, body: string) {
@@ -60,14 +124,14 @@ export class CloudApiSender implements WhatsAppSender {
 /** Records what would have been sent. Used until WhatsApp is connected, and in tests. */
 export class DryRunSender implements WhatsAppSender {
   readonly live = false;
-  sent: { to: string; text?: string; template?: MetaTemplateRef }[] = [];
-  async sendText(to: string, text: string) {
-    this.sent.push({ to, text });
-    return null;
+  sent: { to: string; text?: string; template?: MetaTemplateRef; ctx?: SendContext }[] = [];
+  async sendText(to: string, text: string, ctx?: SendContext): Promise<SendResult> {
+    this.sent.push({ to, text, ctx });
+    return { status: "dry_run", wamid: null };
   }
-  async sendTemplate(to: string, template: MetaTemplateRef) {
-    this.sent.push({ to, template });
-    return null;
+  async sendTemplate(to: string, template: MetaTemplateRef, ctx?: SendContext): Promise<SendResult> {
+    this.sent.push({ to, template, ctx });
+    return { status: "dry_run", wamid: null };
   }
 }
 
@@ -77,9 +141,18 @@ export interface InboundMessage {
   name: string | null;
   text: string;
   timestamp: string;
+  /** text for typed words and button taps; media for images, voice notes, documents and the like. */
+  kind?: "text" | "media";
 }
 
 type WaValue = {
+  statuses?: {
+    id: string;
+    status: string;
+    timestamp: string;
+    recipient_id: string;
+    errors?: { code?: number; title?: string; message?: string; error_data?: { details?: string } }[];
+  }[];
   contacts?: { wa_id: string; profile?: { name?: string } }[];
   messages?: {
     id: string;
@@ -113,6 +186,7 @@ export function inboundMessages(body: unknown): InboundMessage[] {
           name: names.get(m.from) ?? null,
           text,
           timestamp: new Date(Number(m.timestamp) * 1000).toISOString(),
+          kind: m.text || m.button || m.interactive ? "text" : "media",
         });
       }
     }
@@ -123,4 +197,35 @@ export function inboundMessages(body: unknown): InboundMessage[] {
 /** Within Meta's 24-hour customer service window, free text is allowed. */
 export function windowOpen(lastInboundAt: string | null, now = new Date()): boolean {
   return !!lastInboundAt && now.getTime() - new Date(lastInboundAt).getTime() < 24 * 3600_000;
+}
+
+export interface StatusUpdate {
+  wamid: string;
+  status: "sent" | "delivered" | "read" | "failed";
+  timestamp: string;
+  recipient: string;
+  error: string | null;
+}
+
+/** Pulls delivery receipts (sent, delivered, read, failed) out of a WhatsApp webhook body. */
+export function statusUpdates(body: unknown): StatusUpdate[] {
+  const out: StatusUpdate[] = [];
+  const entries = (body as { entry?: { changes?: { field?: string; value?: WaValue }[] }[] })?.entry ?? [];
+  for (const e of entries) {
+    for (const c of e.changes ?? []) {
+      if (c.field !== "messages") continue;
+      for (const st of c.value?.statuses ?? []) {
+        if (!["sent", "delivered", "read", "failed"].includes(st.status)) continue;
+        const err = st.errors?.[0];
+        out.push({
+          wamid: st.id,
+          status: st.status as StatusUpdate["status"],
+          timestamp: new Date(Number(st.timestamp) * 1000).toISOString(),
+          recipient: `+${st.recipient_id}`,
+          error: err ? [err.code, err.title, err.error_data?.details ?? err.message].filter(Boolean).join(" · ") : null,
+        });
+      }
+    }
+  }
+  return out;
 }

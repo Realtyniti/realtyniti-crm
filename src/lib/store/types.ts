@@ -1,5 +1,5 @@
 import type { LeadPage, LeadQuery, LeadView } from "../lead-views";
-import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, Project, ProjectInput, SiteVisit, VisitSlot } from "../types";
+import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, NewWaMessage, Project, ProjectInput, SiteVisit, VisitSlot, WaMessage, WhatsAppSettings } from "../types";
 
 export type NewLead = Omit<Lead, "id" | "created_at" | "updated_at">;
 export type LeadPatch = Partial<Omit<Lead, "id" | "created_at" | "updated_at">>;
@@ -33,6 +33,12 @@ export interface Store {
   listTouches(leadId: string): Promise<LeadTouch[]>;
 
   addEvent(event: Omit<LeadEvent, "id" | "created_at"> & { created_at?: string }): Promise<LeadEvent>;
+  /**
+   * Adds the event only if no event with this key exists, in one atomic step (a unique key in the
+   * database, not a read-then-insert). Returns null when it already existed, so overlapping runs
+   * that both try to add the same flag create exactly one.
+   */
+  addEventOnce(event: Omit<LeadEvent, "id" | "created_at">, key: string): Promise<LeadEvent | null>;
   listEvents(leadId: string): Promise<LeadEvent[]>;
 
   listTemplates(): Promise<MessageTemplate[]>;
@@ -55,6 +61,25 @@ export interface Store {
 
   listSpend(): Promise<ChannelSpend[]>;
   upsertSpend(s: ChannelSpend): Promise<ChannelSpend>;
+
+  /** WhatsApp message log. addWaMessage returns null when the wamid or send_key is already stored (duplicate). */
+  addWaMessage(m: NewWaMessage): Promise<WaMessage | null>;
+  findWaMessage(by: { wamid?: string; sendKey?: string }): Promise<WaMessage | null>;
+  updateWaMessage(id: string, patch: Partial<Pick<WaMessage, "status" | "error" | "wamid" | "lead_id">>): Promise<WaMessage>;
+  /**
+   * Changes a message only if its status is still one of `from` (an atomic compare-and-set).
+   * Returns null when another request changed it first, so a repeated webhook or an overlapping
+   * cron run cannot act on the same change twice.
+   */
+  updateWaMessageIf(id: string, from: WaMessage["status"][], patch: Partial<Pick<WaMessage, "status" | "error" | "wamid">>): Promise<WaMessage | null>;
+  /** Outgoing messages still marked "sending" that were reserved before `before` (the send never finished). */
+  listStuckSending(before: string): Promise<WaMessage[]>;
+  listWaMessages(leadId: string): Promise<WaMessage[]>;
+  /** Lead ids (of those given) that have at least one outbound WhatsApp message Meta accepted (sent, delivered or read). */
+  leadsContactedOnWhatsApp(leadIds: string[]): Promise<Set<string>>;
+
+  getWhatsAppSettings(): Promise<WhatsAppSettings>;
+  updateWhatsAppSettings(patch: Partial<Omit<WhatsAppSettings, "updated_at">>): Promise<WhatsAppSettings>;
 }
 
 export interface VisitFilter {

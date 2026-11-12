@@ -34,6 +34,7 @@ export async function POST(req: Request) {
       // META_PAGE_ACCESS_TOKEN is a system-user token; it mints the Page token lead retrieval needs.
       const token = change.page_id ? await pageAccessToken(change.page_id, page.token, appSecret) : page.token;
       const lead = await fetchMetaLead(change.leadgen_id, token, appSecret);
+      // A live enquiry: it may get automatic WhatsApp messages once the switches allow (the backfill never does).
       const result = await captureLead(store, metaLeadToInput(lead, page.brand));
       if (result.created) {
         const form = await formName(lead.form_id ?? change.form_id, token, appSecret);
