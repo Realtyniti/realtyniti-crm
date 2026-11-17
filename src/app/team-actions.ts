@@ -19,6 +19,7 @@ import {
   changePassword,
   changeRole,
   deactivateMember,
+  editMember,
   reactivateMember,
   reassignAll,
   resetMember,
@@ -200,6 +201,22 @@ export async function changeRoleAction(memberId: string, _: TeamState, fd: FormD
     const member = await changeRole(getAuthStore(), me, memberId, str(fd, "role"));
     revalidatePath("/team");
     return { ok: `${member.name} is now ${{ owner: "the Owner", manager: "a Manager", agent: "an Agent", reviewer: "a view-only Reviewer" }[member.role]}.` };
+  });
+}
+
+export async function editMemberAction(memberId: string, _: TeamState, fd: FormData): Promise<TeamState> {
+  if (isReadOnly()) return { error: PREVIEW };
+  return caught(async () => {
+    const me = await actor("team");
+    const { member, token } = await editMember(getAuthStore(), me, memberId, { name: str(fd, "name"), phone: str(fd, "phone") });
+    revalidatePath("/team");
+    revalidatePath("/leads");
+    if (!token) return { ok: "Saved." };
+    return {
+      ok: `Saved. The new number signs in as ${member.name}; the old password no longer works.`,
+      link: await joinLink(token),
+      linkFor: { name: member.name, phone: member.phone },
+    };
   });
 }
 

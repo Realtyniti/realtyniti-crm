@@ -2,11 +2,12 @@
 
 import { keepFields } from "@/components/auth/keep-form";
 import { useActionState, useEffect, useRef } from "react";
-import { Ban, Link2, MessageCircle, RotateCcw, UserPlus } from "lucide-react";
+import { Ban, Link2, MessageCircle, Pencil, RotateCcw, UserPlus } from "lucide-react";
 import {
   addMemberAction,
   changeRoleAction,
   deactivateAction,
+  editMemberAction,
   reactivateAction,
   reassignAllAction,
   resetLinkAction,
@@ -112,7 +113,7 @@ export function MemberControls({
   leadCount,
   disabled,
 }: {
-  member: { id: string; name: string; role: "manager" | "agent" | "reviewer"; active: boolean };
+  member: { id: string; name: string; phone: string; role: "manager" | "agent" | "reviewer"; active: boolean };
   others: { id: string; name: string }[];
   leadCount: number;
   disabled?: boolean;
@@ -122,7 +123,8 @@ export function MemberControls({
   const [reset, makeLink, resetPending] = useActionState<TeamState>(resetLinkAction.bind(null, member.id), {});
   const [role, changeRole, rolePending] = useActionState<TeamState, FormData>(changeRoleAction.bind(null, member.id), {});
   const [moved, reassign, movePending] = useActionState<TeamState, FormData>(reassignAllAction.bind(null, member.id), {});
-  const last = [deact, react, reset, role, moved].find((s) => s.error || s.ok) ?? {};
+  const [edited, saveEdit, editPending] = useActionState<TeamState, FormData>(editMemberAction.bind(null, member.id), {});
+  const last = [edited, deact, react, reset, role, moved].find((s) => s.error || s.ok) ?? {};
 
   return (
     <div className="space-y-2.5">
@@ -171,6 +173,35 @@ export function MemberControls({
           </form>
         )}
       </div>
+      <details className="group text-[12.5px]">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+          <Pencil className="size-3.5" />
+          Edit name and number
+        </summary>
+        <form action={saveEdit} onSubmit={keepFields(saveEdit)} className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <fieldset disabled={disabled} className="contents">
+            <div>
+              <label htmlFor={`name-${member.id}`} className="label">
+                Name
+              </label>
+              <input id={`name-${member.id}`} name="name" defaultValue={member.name} required className="input h-8 text-[13px]" />
+            </div>
+            <div>
+              <label htmlFor={`phone-${member.id}`} className="label">
+                Mobile number
+              </label>
+              <input id={`phone-${member.id}`} name="phone" type="tel" inputMode="tel" defaultValue={member.phone} required className="input h-8 text-[13px]" />
+            </div>
+            <button className="btn h-8 px-3 text-[12.5px]" disabled={editPending}>
+              {editPending ? "Saving…" : "Save"}
+            </button>
+          </fieldset>
+          <p className="text-[12px] text-faint sm:col-span-3">
+            Leads, role and history stay with this login. A new number hands the login to someone else: the old password stops working
+            and you get a fresh link to send them.
+          </p>
+        </form>
+      </details>
       {leadCount > 0 && (
         <form action={reassign} className="flex flex-wrap items-center gap-1.5 text-[12.5px]">
           <span className="text-muted">
@@ -191,6 +222,7 @@ export function MemberControls({
       )}
       <Status state={last} />
       <LinkBox state={reset} />
+      <LinkBox state={edited} />
     </div>
   );
 }

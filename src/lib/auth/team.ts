@@ -230,12 +230,50 @@ export async function changeRole(auth: AuthStore, actor: Member, memberId: strin
   return toMember(await auth.updateMember(row.id, { role }));
 }
 
-/** New password link for someone; their current devices are signed out now. */
+/**
+ * New password link for someone. Their old password stops working and their devices are signed
+ * out now, so handing a login to a new person never leaves the previous holder a way in.
+ */
 export async function resetMember(auth: AuthStore, actor: Member, memberId: string) {
   const row = await editable(auth, actor, memberId);
   if (!row.active) throw new AuthError("Reactivate this person first.");
+  await auth.updateMember(row.id, { password_hash: null, failed_logins: 0, locked_until: null });
   await auth.deleteMemberSessions(row.id);
+  await auth.deleteMemberPush(row.id);
   return issueInvite(auth, row.id);
+}
+
+/**
+ * Rename someone or change their mobile number. Their leads, role and history stay with the login.
+ * A new mobile number means the login is going to someone else (e.g. a placeholder handed to a real
+ * employee): the old password stops working, every device is signed out, and a fresh link is
+ * returned for the new person to choose their password.
+ */
+export async function editMember(
+  auth: AuthStore,
+  actor: Member,
+  memberId: string,
+  input: { name: string; phone: string },
+): Promise<{ member: Member; token: string | null }> {
+  const row = await editable(auth, actor, memberId);
+  const name = cleanName(input.name);
+  const phone = cleanPhone(input.phone);
+  const handover = phone !== row.phone;
+  let updated: MemberRow;
+  try {
+    updated = await auth.updateMember(row.id, { name, phone });
+  } catch (e) {
+    if (e instanceof DuplicateError) throw new AuthError(e.message);
+    throw e;
+  }
+  if (!handover) return { member: toMember(updated), token: null };
+  if (!row.active) {
+    // Nothing to hand over yet; reactivating and sending a link does that.
+    await auth.updateMember(row.id, { password_hash: null });
+    return { member: toMember({ ...updated, password_hash: null }), token: null };
+  }
+  const token = await resetMember(auth, actor, row.id);
+  return { member: toMember({ ...updated, password_hash: null }), token };
 }
 
 /** Hands every lead of one member to another active member (or leaves them unassigned). */

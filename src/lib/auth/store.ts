@@ -23,7 +23,7 @@ export interface MemberRow extends Omit<Member, "has_password"> {
   updated_at: string;
 }
 
-export type MemberPatch = Partial<Pick<MemberRow, "name" | "role" | "password_hash" | "active" | "failed_logins" | "locked_until" | "last_login_at" | "deactivated_at">>;
+export type MemberPatch = Partial<Pick<MemberRow, "name" | "phone" | "role" | "password_hash" | "active" | "failed_logins" | "locked_until" | "last_login_at" | "deactivated_at">>;
 
 export interface Session {
   id: string;
@@ -147,6 +147,9 @@ export class MemoryAuthStore implements AuthStore {
     const row = this.members.get(id);
     if (!row) throw new Error("No such member");
     if (patch.role === "owner" && row.role !== "owner") throw new DuplicateError("The CRM already has an owner.");
+    if (patch.phone && patch.phone !== row.phone && (await this.findMemberByPhone(patch.phone))) {
+      throw new DuplicateError("That mobile number is already on the team.");
+    }
     const next = { ...row, ...patch, updated_at: new Date().toISOString() };
     this.members.set(id, next);
     return next;
@@ -256,7 +259,9 @@ export class SupabaseAuthStore implements AuthStore {
       .eq("id", id)
       .select(MEMBER_COLUMNS)
       .single();
-    if (error?.code === "23505") throw new DuplicateError("The CRM already has an owner.");
+    if (error?.code === "23505") {
+      throw new DuplicateError(error.message.includes("one_owner") ? "The CRM already has an owner." : "That mobile number is already on the team.");
+    }
     if (error) throw new Error(error.message);
     return data as MemberRow;
   }

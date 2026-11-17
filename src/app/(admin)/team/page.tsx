@@ -87,7 +87,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               {m.role !== "owner" && (
                 <div className="sm:max-w-[60%]">
                   <MemberControls
-                    member={{ id: m.id, name: m.name, role: m.role, active: m.active }}
+                    member={{ id: m.id, name: m.name, phone: m.phone, role: m.role, active: m.active }}
                     others={active.filter((o) => o.id !== m.id && o.role !== "reviewer").map((o) => ({ id: o.id, name: `${o.name} (${ROLE_LABEL[o.role]})` }))}
                     leadCount={allLeads[m.id] ?? 0}
                     disabled={readOnly}

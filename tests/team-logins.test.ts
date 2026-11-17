@@ -7,6 +7,7 @@ import {
   changePassword,
   changeRole,
   deactivateMember,
+  editMember,
   inviteFor,
   LOCK_MINUTES,
   MAX_FAILED,
@@ -426,5 +427,44 @@ describe("view-only reviewer (Meta App Review)", () => {
     expect(maskPhone("+447700900123")).toBe("+44 77xxx xxx23");
     expect(maskText("call 98765 43210 now")).toBe("call 98xxx xxx10 now");
     expect(maskText("Visit at 10:30, 2 people")).toBe("Visit at 10:30, 2 people");
+  });
+});
+
+describe("placeholder logins handed to real employees", () => {
+  it("renaming keeps the login, password and leads", async () => {
+    const store = new MemoryStore();
+    const { member, session } = await join("Agent 1", "9876500001", "agent");
+    const { lead } = await captureLead(store, { source: "website", phone: "9811111111" });
+    await store.updateLead(lead.id, { assigned_to: member.id });
+    const r = await editMember(auth, owner, member.id, { name: "Ravi Kumar", phone: "9876500001" });
+    expect(r.token).toBeNull();
+    expect(r.member.name).toBe("Ravi Kumar");
+    expect(await resolveSession(auth, session)).toMatchObject({ name: "Ravi Kumar" });
+    expect((await store.getLead(lead.id))!.assigned_to).toBe(member.id);
+  });
+
+  it("a new number hands it over: old password and devices stop, a fresh link is made", async () => {
+    const { member, session } = await join("Agent 1", "9876500001", "agent");
+    const r = await editMember(auth, owner, member.id, { name: "Ravi Kumar", phone: "98111 22233" });
+    expect(r.token).toBeTruthy();
+    expect(r.member).toMatchObject({ phone: "+919811122233", has_password: false });
+    expect(await resolveSession(auth, session)).toBeNull();
+    await expect(signIn(auth, { phone: "9876500001", password: PW })).rejects.toThrow();
+    await expect(signIn(auth, { phone: "9811122233", password: PW })).rejects.toThrow();
+    await acceptInvite(auth, { token: r.token!, password: "ravi own pass", confirm: "ravi own pass" });
+    expect((await signIn(auth, { phone: "9811122233", password: "ravi own pass" })).member.id).toBe(member.id);
+  });
+
+  it("a new login link stops the old password straight away", async () => {
+    const { member } = await join("Agent 1", "9876500001", "agent");
+    await resetMember(auth, owner, member.id);
+    await expect(signIn(auth, { phone: "9876500001", password: PW })).rejects.toThrow();
+  });
+
+  it("refuses a number already on the team, and only the owner edits", async () => {
+    const { member: a } = await join("A", "9876500001", "agent");
+    const { member: m } = await join("M", "9876500002", "manager");
+    await expect(editMember(auth, owner, a.id, { name: "A", phone: "9876500002" })).rejects.toThrow(/already on the team/);
+    await expect(editMember(auth, m, a.id, { name: "X", phone: "9876500001" })).rejects.toThrow(/Only the owner/);
   });
 });
