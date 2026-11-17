@@ -1,12 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isReadOnly } from "@/lib/read-only";
 
-/** Open without the CRM password: webhooks and cron carry their own secrets; buyers open booking links. */
-const PUBLIC = /^\/(api\/intake|api\/whatsapp|api\/cron|book\/|privacy)/;
+/**
+ * Open without signing in: webhooks and cron carry their own secrets; buyers open booking links;
+ * the sign-in, invite and privacy pages; and the files a phone needs to install the app.
+ */
+const PUBLIC = /^\/(api\/intake|api\/whatsapp|api\/cron|book\/|privacy|login|join\/|sw\.js$|manifest\.webmanifest$|offline\.html$|icons\/|apple-touch-icon)/;
+
+/** Same name as SESSION_COOKIE in lib/auth/session.ts (that module is server-only, so not imported here). */
+const SESSION_COOKIE = "rn_session";
 
 /*
- * Chetan-only access. Every screen sits behind one password (ADMIN_PASSWORD).
- * Intake webhooks carry their own secrets and are left open here.
+ * Every CRM screen needs a personal login. This only checks that a session cookie is present,
+ * which keeps the edge fast; every page, server action and admin API route then checks the
+ * session against the database (lib/auth/session.ts), so a deactivated login stops working on
+ * its very next request.
  */
 export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
@@ -16,24 +24,12 @@ export function middleware(req: NextRequest) {
   }
   if (PUBLIC.test(path)) return NextResponse.next();
 
-  const password = process.env.ADMIN_PASSWORD;
-  if (!password) {
-    if (process.env.NODE_ENV === "production") {
-      return new NextResponse("Set ADMIN_PASSWORD to open the CRM.", { status: 503 });
-    }
-    return NextResponse.next();
-  }
+  if (req.cookies.get(SESSION_COOKIE)?.value) return NextResponse.next();
 
-  const header = req.headers.get("authorization");
-  if (header?.startsWith("Basic ")) {
-    const decoded = atob(header.slice(6));
-    const pass = decoded.slice(decoded.indexOf(":") + 1);
-    if (pass === password) return NextResponse.next();
-  }
-  return new NextResponse("Login required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Realtyniti CRM"' },
-  });
+  if (path.startsWith("/api/")) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  const login = new URL("/login", req.url);
+  if (path !== "/") login.searchParams.set("next", path + req.nextUrl.search);
+  return NextResponse.redirect(login);
 }
 
 export const config = {

@@ -56,6 +56,8 @@ export interface Lead extends Requirement {
    * live and for imports; on for new live enquiries. Manual replies ignore it.
    */
   wa_auto_allowed: boolean;
+  /** The team member who works this lead (null: unassigned). Agents only see leads assigned to them. */
+  assigned_to: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -75,6 +77,8 @@ export interface LeadEvent {
   kind: "message_in" | "message_out" | "note" | "status_change" | "flag";
   channel: LeadSource | null;
   body: string;
+  /** The team member who wrote the note or made the change (null: the system, or before team logins). */
+  actor_id?: string | null;
   created_at: string;
 }
 

@@ -1,11 +1,13 @@
 import { formatDateTime } from "@/lib/format";
 import { isReadOnly } from "@/lib/read-only";
 import { getStore } from "@/lib/store";
+import { requirePermission } from "@/lib/auth/session";
 import { WhatsAppSettingsForm } from "./form";
 
 export const dynamic = "force-dynamic";
 
 export default async function WhatsAppSettingsPage() {
+  await requirePermission("settings");
   const settings = await getStore().getWhatsAppSettings();
   const connected = !!process.env.WHATSAPP_PHONE_NUMBER_ID && !!process.env.WHATSAPP_TOKEN && !isReadOnly();
   const facts: [string, string][] = [

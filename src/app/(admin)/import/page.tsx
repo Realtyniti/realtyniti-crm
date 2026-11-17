@@ -1,6 +1,8 @@
+import { requirePermission } from "@/lib/auth/session";
 import { ImportForm } from "./form";
 
-export default function ImportPage() {
+export default async function ImportPage() {
+  await requirePermission("leads.import");
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <h1 className="page-title">Import existing leads</h1>

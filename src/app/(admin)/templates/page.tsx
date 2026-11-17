@@ -2,11 +2,13 @@ import { SOURCE_LABEL } from "@/components/badges";
 import { formatDateTime } from "@/lib/format";
 import { ensureDefaultTemplates } from "@/lib/leads";
 import { getStore } from "@/lib/store";
+import { requirePermission } from "@/lib/auth/session";
 import { TemplateForm } from "./form";
 
 export const dynamic = "force-dynamic";
 
 export default async function TemplatesPage() {
+  await requirePermission("settings");
   const store = getStore();
   await ensureDefaultTemplates(store);
   const templates = await store.listTemplates();

@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { getAuthStore } from "@/lib/auth/session";
+import { notifyNewLead } from "@/lib/push";
 import { timingSafeEqual } from "node:crypto";
 import { greetNewLead } from "@/lib/catcher";
 import { catcherConfig } from "@/lib/catcher-config";
@@ -25,7 +27,10 @@ export async function POST(req: Request) {
   try {
     const store = getStore();
     const result = await captureLead(store, websiteFormToLead(parsed.data));
-    if (result.created) await greetNewLead(store, catcherConfig(), result.lead);
+    if (result.created) {
+      await greetNewLead(store, catcherConfig(), result.lead);
+      after(() => notifyNewLead(getAuthStore(), result.lead));
+    }
     return NextResponse.json({ id: result.lead.id, created: result.created }, { status: result.created ? 201 : 200 });
   } catch (e) {
     if (e instanceof LeadError) return NextResponse.json({ error: e.message }, { status: 400 });

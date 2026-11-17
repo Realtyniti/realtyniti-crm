@@ -3,6 +3,7 @@ import { SOURCE_LABEL } from "@/components/badges";
 import { buildChannelBoard, monthKey, type Period } from "@/lib/channels";
 import { formatInr } from "@/lib/format";
 import { getStore } from "@/lib/store";
+import { requirePermission } from "@/lib/auth/session";
 import { SpendForm } from "./form";
 
 function minutes(m: number | null): string {
@@ -14,6 +15,7 @@ function minutes(m: number | null): string {
 export default async function ChannelsPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const { p } = await searchParams;
   const period: Period = p === "week" ? "week" : "month";
+  await requirePermission("insights");
   const store = getStore();
   const [leads, visits, spend] = await Promise.all([store.listLeads(), store.listVisits(), store.listSpend()]);
   const rows = buildChannelBoard(leads, visits, spend, period);

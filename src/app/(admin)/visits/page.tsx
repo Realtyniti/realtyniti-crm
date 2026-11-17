@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { toggleSlotAction, visitStatusAction } from "@/app/actions";
-import { getStore } from "@/lib/store";
+import { getStoreFor } from "@/lib/store";
+import { requireMember } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { formatSlotTime, IST, slotsWithBookings } from "@/lib/visits";
 import { NewSlotsForm } from "./forms";
 import { displayName } from "@/lib/display-name";
 
 export default async function VisitsPage() {
-  const store = getStore();
+  const me = await requireMember();
+  const store = getStoreFor(me);
+  const manage = can(me.role, "visits.slots");
   // Include today's earlier slots so finished visits can be marked done.
   const startOfToday = new Date(Date.now() - 24 * 3600_000);
   const slots = await slotsWithBookings(store, startOfToday);
@@ -21,7 +25,7 @@ export default async function VisitsPage() {
         Buyers can only pick from slots you open here, at least 2 hours ahead. Hot leads get their booking link
         automatically; you can also copy a link from any lead card.
       </p>
-      <NewSlotsForm areas={areas} />
+      {manage && <NewSlotsForm areas={areas} />}
 
       {days.length === 0 && <p className="panel text-sm text-muted">No slots open yet.</p>}
       {days.map((day) => (
@@ -35,7 +39,8 @@ export default async function VisitsPage() {
                   <div className="font-medium">{formatSlotTime(s)}</div>
                   <div className="text-sm text-muted">{s.area}</div>
                   <div className="text-xs text-muted">
-                    {s.booked.length}/{s.capacity} booked{s.is_open ? "" : " · closed"}
+                    {manage ? `${s.booked.length}/${s.capacity} booked` : `${s.booked.length} of your leads booked`}
+                    {s.is_open ? "" : " · closed"}
                   </div>
                 </div>
                 <ul className="flex-1 space-y-1 text-sm">
@@ -63,9 +68,11 @@ export default async function VisitsPage() {
                     );
                   })}
                 </ul>
-                <form action={toggleSlotAction.bind(null, s.id, !s.is_open)}>
-                  <button className="btn-ghost text-xs">{s.is_open ? "Close slot" : "Reopen"}</button>
-                </form>
+                {manage && (
+                  <form action={toggleSlotAction.bind(null, s.id, !s.is_open)}>
+                    <button className="btn-ghost text-xs">{s.is_open ? "Close slot" : "Reopen"}</button>
+                  </form>
+                )}
               </div>
             ))}
         </section>

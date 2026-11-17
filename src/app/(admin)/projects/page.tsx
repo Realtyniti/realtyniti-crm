@@ -3,8 +3,11 @@ import { FreshnessDot } from "@/components/freshness";
 import { formatBudget, formatDate } from "@/lib/format";
 import { AVAILABILITY_LABEL, FRESH_DAYS, freshness, offersExpiring, STALE_DAYS } from "@/lib/projects";
 import { getStore } from "@/lib/store";
+import { requireMember } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 
 export default async function ProjectsPage() {
+  const me = await requireMember();
   const projects = await getStore().listProjects();
   const order = { red: 0, amber: 1, green: 2 } as const;
   const sorted = [...projects].sort((a, b) => order[freshness(a)] - order[freshness(b)] || a.name.localeCompare(b.name));
@@ -14,9 +17,11 @@ export default async function ProjectsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="page-title">Projects</h1>
-        <Link href="/projects/new" className="btn-ghost ml-auto">
-          Add project
-        </Link>
+        {can(me.role, "projects.edit") && (
+          <Link href="/projects/new" className="btn-ghost ml-auto">
+            Add project
+          </Link>
+        )}
       </div>
       <p className="max-w-3xl text-sm text-muted">
         Green: confirmed in the last {FRESH_DAYS} days. Amber: {FRESH_DAYS}–{STALE_DAYS} days. Red: older or never; confirm

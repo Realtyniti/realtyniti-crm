@@ -3,6 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Avatar } from "@/components/badges";
+import { can, ROLE_LABEL, type Permission, type Role } from "@/lib/auth/roles";
+
+export interface NavUser {
+  name: string;
+  role: Role;
+}
 import {
   Building2,
   CalendarDays,
@@ -10,6 +17,7 @@ import {
   ChevronsRight,
   FileText,
   LayoutDashboard,
+  UserCog,
   MessageCircle,
   Menu,
   Radio,
@@ -27,6 +35,8 @@ interface NavItem {
   icon: LucideIcon;
   /** Other paths that light this item up. */
   also?: RegExp;
+  /** Shown only to roles with this permission. */
+  needs?: Permission;
 }
 
 const GROUPS: { label: string | null; items: NavItem[] }[] = [
@@ -43,15 +53,16 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
     label: "Tools",
     items: [
       { href: "/match", label: "Match Finder", icon: SearchCheck },
-      { href: "/import", label: "Import", icon: Upload },
+      { href: "/import", label: "Import", icon: Upload, needs: "leads.import" },
     ],
   },
-  { label: "Insights", items: [{ href: "/channels", label: "Channels", icon: Radio }] },
+  { label: "Insights", items: [{ href: "/channels", label: "Channels", icon: Radio, needs: "insights" }] },
   {
     label: "Settings",
     items: [
-      { href: "/templates", label: "Templates", icon: FileText },
-      { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
+      { href: "/team", label: "Team", icon: UserCog, needs: "team" },
+      { href: "/templates", label: "Templates", icon: FileText, needs: "settings" },
+      { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle, needs: "settings" },
     ],
   },
 ];
@@ -61,11 +72,12 @@ function isActive(path: string, item: NavItem) {
   return item.href === "/" ? path === "/" : path === item.href || path.startsWith(`${item.href}/`);
 }
 
-function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+function NavList({ collapsed, onNavigate, role }: { collapsed: boolean; onNavigate?: () => void; role: Role }) {
   const path = usePathname();
+  const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => !i.needs || can(role, i.needs)) })).filter((g) => g.items.length);
   return (
     <nav aria-label="Main" className="flex flex-col gap-0.5">
-      {GROUPS.map((g, i) => (
+      {groups.map((g, i) => (
         <div key={g.label ?? i} className="flex flex-col gap-0.5">
           {g.label &&
             (collapsed ? (
@@ -128,8 +140,30 @@ function RailSearch() {
   );
 }
 
+/** Who is signed in, linking to their account (password, alerts, sign out). */
+function Me({ user, collapsed, onNavigate }: { user: NavUser; collapsed: boolean; onNavigate?: () => void }) {
+  const path = usePathname();
+  return (
+    <Link
+      href="/account"
+      onClick={onNavigate}
+      title={collapsed ? `${user.name} (${ROLE_LABEL[user.role]})` : undefined}
+      aria-current={path === "/account" ? "page" : undefined}
+      className={`mt-3 flex items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-white/5 ${path === "/account" ? "bg-white/[0.09]" : ""} ${collapsed ? "justify-center px-0" : ""}`}
+    >
+      <Avatar name={user.name} size="sm" />
+      {!collapsed && (
+        <span className="min-w-0">
+          <span className="block truncate text-[13px] font-medium text-white">{user.name}</span>
+          <span className="block text-[11.5px] text-navy-fg/70">{ROLE_LABEL[user.role]} · My account</span>
+        </span>
+      )}
+    </Link>
+  );
+}
+
 /** Desktop: a navy rail that collapses to icons and remembers it. */
-export function Sidebar({ initialCollapsed }: { initialCollapsed: boolean }) {
+export function Sidebar({ initialCollapsed, user }: { initialCollapsed: boolean; user: NavUser }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   function toggle() {
     const next = !collapsed;
@@ -147,8 +181,9 @@ export function Sidebar({ initialCollapsed }: { initialCollapsed: boolean }) {
         <Brand collapsed={collapsed} />
         {!collapsed && <RailSearch />}
         <div className="mt-4 flex-1 overflow-y-auto">
-          <NavList collapsed={collapsed} />
+          <NavList collapsed={collapsed} role={user.role} />
         </div>
+        <Me user={user} collapsed={collapsed} />
         <button
           type="button"
           onClick={toggle}
@@ -167,7 +202,7 @@ export function Sidebar({ initialCollapsed }: { initialCollapsed: boolean }) {
 }
 
 /** Phones and tablets: a menu button that opens the same navigation as a drawer. */
-export function MobileNav() {
+export function MobileNav({ user }: { user: NavUser }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   useEffect(() => setOpen(false), [path]);
@@ -193,8 +228,9 @@ export function MobileNav() {
             </div>
             <RailSearch />
             <div className="mt-4 flex-1 overflow-y-auto">
-              <NavList collapsed={false} onNavigate={() => setOpen(false)} />
+              <NavList collapsed={false} onNavigate={() => setOpen(false)} role={user.role} />
             </div>
+            <Me user={user} collapsed={false} onNavigate={() => setOpen(false)} />
           </aside>
         </div>
       )}

@@ -15,7 +15,8 @@ import {
   timelineLabel,
   type FollowUpBucket,
 } from "@/lib/lead-display";
-import { getStore } from "@/lib/store";
+import { getStoreFor } from "@/lib/store";
+import { requireMember } from "@/lib/auth/session";
 import type { LeadFacts } from "@/lib/store/types";
 import type { Lead } from "@/lib/types";
 
@@ -43,11 +44,12 @@ function tally(values: string[], order?: string[]): [string, number][] {
   return order ? rows.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])) : rows.sort((a, b) => b[1] - a[1]);
 }
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ f?: string }> }) {
-  const { f } = await searchParams;
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ f?: string; denied?: string }> }) {
+  const { f, denied } = await searchParams;
   if (f && OLD_FILTER[f]) redirect(OLD_FILTER[f] === "open" ? "/leads" : `/leads?view=${OLD_FILTER[f]}`);
 
-  const store = getStore();
+  const me = await requireMember();
+  const store = getStoreFor(me);
   const now = new Date();
   const weekAhead = new Date(now.getTime() + 7 * 86_400_000).toISOString();
 
@@ -85,13 +87,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const noBudget = openFacts.filter((x) => x.budget_min_inr == null && x.budget_max_inr == null).length;
 
   const hour = Number(now.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", hour12: false }));
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const greeting = `${hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"}, ${me.name.split(" ")[0]}`;
   const today = now.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long" });
   const plural = (n: number, w: string) => `${countWord(n)} ${w}${n === 1 ? "" : "s"}`;
 
   return (
     <div className="grid gap-14 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0">
+        {denied && (
+          <div className="mb-6 rounded-xl border border-gold-line bg-gold-soft px-4 py-2.5 text-[13px] text-gold-ink">
+            That screen is for the owner{me.role === "agent" ? " or a manager" : ""}. Ask them if you need something from it.
+          </div>
+        )}
         <div className="eyebrow">{today}</div>
         <p className="mt-4 max-w-[700px] font-serif text-[32px] leading-[1.18] tracking-[-0.015em] sm:text-[38px]">
           {greeting}. You have{" "}

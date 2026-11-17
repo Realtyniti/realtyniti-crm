@@ -5,7 +5,8 @@ import { FreshnessDot } from "@/components/freshness";
 import { formatBudget } from "@/lib/format";
 import { matchProjects, shortlistMessage, type Match } from "@/lib/match";
 import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTimelineMonths } from "@/lib/parse";
-import { getStore } from "@/lib/store";
+import { getStoreFor } from "@/lib/store";
+import { requireMember } from "@/lib/auth/session";
 import type { Requirement } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
 
@@ -56,7 +57,8 @@ function MatchRow({ m }: { m: Match }) {
 
 export default async function MatchPage({ searchParams }: { searchParams: Promise<Search> }) {
   const q = await searchParams;
-  const store = getStore();
+  const me = await requireMember();
+  const store = getStoreFor(me);
   const lead = q.lead ? await store.getLead(q.lead) : null;
   const req: Requirement | null = lead ?? (Object.values(q).some(Boolean) ? requirementFrom(q) : null);
   const result = req ? matchProjects(req, await store.listProjects()) : null;

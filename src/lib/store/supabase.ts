@@ -24,6 +24,7 @@ export class SupabaseStore implements Store {
     if (filter.temperature) q = q.eq("temperature", filter.temperature);
     if (filter.status) q = q.eq("status", filter.status);
     if (filter.needsChetan !== undefined) q = q.eq("needs_chetan", filter.needsChetan);
+    if (filter.assignedTo) q = q.eq("assigned_to", filter.assignedTo);
     return many<Lead>(await q);
   }
 
@@ -33,6 +34,8 @@ export class SupabaseStore implements Store {
     let q = applyView(this.db.from("leads").select("*", { count: "exact" }), query.view);
     if (query.source) q = q.eq("first_source", query.source);
     if (query.status) q = q.eq("status", query.status);
+    if (query.assignee === "none") q = q.is("assigned_to", null);
+    else if (query.assignee) q = q.eq("assigned_to", query.assignee);
     if (query.budget === "known") q = q.or("budget_min_inr.not.is.null,budget_max_inr.not.is.null");
     if (query.budget === "unknown") q = q.is("budget_min_inr", null).is("budget_max_inr", null);
     const text = cleanSearch(query.q);
@@ -47,10 +50,12 @@ export class SupabaseStore implements Store {
     return { rows: (data ?? []) as Lead[], total: count ?? 0 };
   }
 
-  async countLeads(views: readonly LeadView[]) {
+  async countLeads(views: readonly LeadView[], assignedTo?: string) {
     const counts = await Promise.all(
       views.map(async (v) => {
-        const { count, error } = await applyView(this.db.from("leads").select("id", { count: "exact", head: true }), v);
+        let base = this.db.from("leads").select("id", { count: "exact", head: true });
+        if (assignedTo) base = base.eq("assigned_to", assignedTo);
+        const { count, error } = await applyView(base, v);
         if (error) throw new Error(error.message);
         return [v, count ?? 0] as const;
       }),
@@ -58,8 +63,10 @@ export class SupabaseStore implements Store {
     return Object.fromEntries(counts) as Record<LeadView, number>;
   }
 
-  async leadFacts() {
-    return many<LeadFacts>(await this.db.from("leads").select("property_type, budget_min_inr, budget_max_inr, micro_market, status"));
+  async leadFacts(assignedTo?: string) {
+    let q = this.db.from("leads").select("property_type, budget_min_inr, budget_max_inr, micro_market, status");
+    if (assignedTo) q = q.eq("assigned_to", assignedTo);
+    return many<LeadFacts>(await q);
   }
 
   async firstTouchAt(leadIds: string[]) {
@@ -143,9 +150,17 @@ export class SupabaseStore implements Store {
     return must<VisitSlot>(await this.db.from("visit_slots").update(patch).eq("id", id).select().single());
   }
 
+  async reassignLeads(from: string, to: string | null) {
+    const rows = many<{ id: string }>(
+      await this.db.from("leads").update({ assigned_to: to }).eq("assigned_to", from).select("id"),
+    );
+    return rows.length;
+  }
+
   async listVisits(filter: VisitFilter = {}) {
     let q = this.db.from("site_visits").select("*").order("created_at").limit(1000);
     if (filter.leadId) q = q.eq("lead_id", filter.leadId);
+    if (filter.leadIds) q = q.in("lead_id", filter.leadIds);
     if (filter.slotId) q = q.eq("slot_id", filter.slotId);
     if (filter.slotIds) q = q.in("slot_id", filter.slotIds);
     if (filter.status) q = q.eq("status", filter.status);

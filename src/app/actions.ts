@@ -7,7 +7,12 @@ import { parseBudget, parseMicroMarket, parsePropertyType, parsePurpose, parseTi
 import { markFollowedUp } from "@/lib/followup-clock";
 import { importLeads } from "@/lib/import";
 import { acceptedPatch, FIGURE_LABEL, figureChanges, figuresFromForm, projectFromForm, type FigureChange, type FigureKey } from "@/lib/projects";
-import { getStore } from "@/lib/store";
+import { getStore, getStoreFor } from "@/lib/store";
+import { AccessError } from "@/lib/store/scoped";
+import { actor, getAuthStore, PermissionError } from "@/lib/auth/session";
+import { can, type Permission } from "@/lib/auth/roles";
+import { notifyNewLead } from "@/lib/push";
+import { normalisePhone } from "@/lib/phone";
 import { isReadOnly, ReadOnlyError } from "@/lib/read-only";
 import { setVisitStatus } from "@/lib/visits";
 import { catcherConfig } from "@/lib/catcher-config";
@@ -42,7 +47,24 @@ async function run(fn: () => Promise<unknown>): Promise<ActionState | null> {
     await fn();
     return null;
   } catch (e) {
-    if (e instanceof LeadError || e instanceof ReadOnlyError) return { error: e.message };
+    if (e instanceof LeadError || e instanceof ReadOnlyError || e instanceof PermissionError || e instanceof AccessError) return { error: e.message };
+    throw e;
+  }
+}
+
+/** The signed-in member's store, after checking their role allows this. Throws PermissionError otherwise. */
+async function storeFor(permission?: Permission) {
+  const me = await actor(permission);
+  return { me, store: getStoreFor(me) };
+}
+
+/** For forms: the same check, as a message instead of an exception. */
+async function denied(permission?: Permission): Promise<ActionState | null> {
+  try {
+    await actor(permission);
+    return null;
+  } catch (e) {
+    if (e instanceof PermissionError) return { error: e.message };
     throw e;
   }
 }
@@ -51,9 +73,21 @@ export async function addLeadAction(_: ActionState, fd: FormData): Promise<Actio
   if (isReadOnly()) return { error: new ReadOnlyError().message };
   const source = str(fd, "source") as LeadSource | null;
   if (!source || !LEAD_SOURCES.includes(source)) return { error: "Pick where the lead came from." };
+  const no = await denied();
+  if (no) return no;
+  const me = await actor();
+  const store = getStore();
+  // An agent can only add a number that is new to the CRM or already theirs; someone else's card stays private.
+  if (!can(me.role, "leads.all")) {
+    const phone = normalisePhone(str(fd, "phone"));
+    const existing = phone ? await store.findLeadByPhone(phone) : null;
+    if (existing && existing.assigned_to !== me.id) {
+      return { error: "This number is already in the CRM with someone else. Ask the owner or a manager to assign it to you." };
+    }
+  }
   let id = "";
   const err = await run(async () => {
-    const r = await captureLead(getStore(), {
+    const r = await captureLead(store, {
       source,
       phone: str(fd, "phone") ?? "",
       name: str(fd, "name"),
@@ -62,6 +96,10 @@ export async function addLeadAction(_: ActionState, fd: FormData): Promise<Actio
       ...answersFrom(fd),
     });
     id = r.lead.id;
+    // A lead an agent adds is theirs.
+    let lead = r.lead;
+    if (r.created && !can(me.role, "leads.all")) lead = await store.updateLead(lead.id, { assigned_to: me.id });
+    if (r.created) await notifyNewLead(getAuthStore(), lead, { except: me.id });
   });
   if (err) return err;
   revalidatePath("/");
@@ -71,8 +109,8 @@ export async function addLeadAction(_: ActionState, fd: FormData): Promise<Actio
 
 export async function updateLeadAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
-  const err = await run(() =>
-    updateRequirement(getStore(), id, {
+  const err = await run(async () =>
+    updateRequirement((await storeFor()).store, id, {
       name: str(fd, "name"),
       email: str(fd, "email"),
       notes: str(fd, "notes"),
@@ -89,7 +127,7 @@ export async function updateLeadAction(id: string, _: ActionState, fd: FormData)
 export async function closeLeadAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
   const outcome = str(fd, "outcome") === "converted" ? "converted" : "lost";
-  const err = await run(() => closeLead(getStore(), id, outcome, str(fd, "lost_reason")));
+  const err = await run(async () => closeLead((await storeFor()).store, id, outcome, str(fd, "lost_reason")));
   if (err) return err;
   revalidatePath(`/leads/${id}`);
   revalidatePath("/");
@@ -100,7 +138,7 @@ export async function closeLeadAction(id: string, _: ActionState, fd: FormData):
 export async function clearFlagAction(id: string) {
   // Read-only preview: nothing to do; the banner says so.
   if (isReadOnly()) return;
-  await clearChetanFlag(getStore(), id);
+  await clearChetanFlag((await storeFor("leads.control")).store, id);
   revalidatePath(`/leads/${id}`);
   revalidatePath("/");
   revalidatePath("/leads");
@@ -111,7 +149,8 @@ export async function addNoteAction(id: string, fd: FormData) {
   if (isReadOnly()) return;
   const body = str(fd, "body");
   if (!body) return;
-  await getStore().addEvent({ lead_id: id, kind: "note", channel: null, body });
+  const { me, store } = await storeFor();
+  await store.addEvent({ lead_id: id, kind: "note", channel: null, body, actor_id: me.id });
   revalidatePath(`/leads/${id}`);
 }
 
@@ -119,7 +158,7 @@ export async function saveTemplateAction(key: string, _: ActionState, fd: FormDa
   if (isReadOnly()) return { error: new ReadOnlyError().message };
   const body = str(fd, "body") ?? "";
   const approve = fd.get("intent") === "approve";
-  const err = await run(() => saveTemplate(getStore(), key, body, approve));
+  const err = await run(async () => saveTemplate((await storeFor("settings")).store, key, body, approve));
   if (err) return err;
   revalidatePath("/templates");
   return { ok: approve ? "Approved." : "Saved (not approved)." };
@@ -127,6 +166,8 @@ export async function saveTemplateAction(key: string, _: ActionState, fd: FormDa
 
 export async function createSlotsAction(_: ActionState, fd: FormData): Promise<ActionState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const no = await denied("visits.slots");
+  if (no) return no;
   const date = str(fd, "date");
   const time = str(fd, "time");
   const area = str(fd, "area");
@@ -159,20 +200,22 @@ export async function createSlotsAction(_: ActionState, fd: FormData): Promise<A
 export async function toggleSlotAction(id: string, open: boolean) {
   // Read-only preview: nothing to do; the banner says so.
   if (isReadOnly()) return;
-  await getStore().updateSlot(id, { is_open: open });
+  await (await storeFor("visits.slots")).store.updateSlot(id, { is_open: open });
   revalidatePath("/visits");
 }
 
 export async function visitStatusAction(visitId: string, leadId: string, status: "done" | "no_show" | "cancelled") {
   // Read-only preview: nothing to do; the banner says so.
   if (isReadOnly()) return;
-  await setVisitStatus(getStore(), visitId, leadId, status);
+  await setVisitStatus((await storeFor()).store, visitId, leadId, status);
   revalidatePath("/visits");
   revalidatePath(`/leads/${leadId}`);
 }
 
 export async function importLeadsAction(_: ActionState, fd: FormData): Promise<ActionState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const no = await denied("leads.import");
+  if (no) return no;
   const csv = str(fd, "csv");
   const fallback = str(fd, "source") as LeadSource | null;
   if (!csv) return { error: "Paste the leads first." };
@@ -190,6 +233,8 @@ export async function importLeadsAction(_: ActionState, fd: FormData): Promise<A
 
 export async function saveProjectAction(id: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const no = await denied("projects.edit");
+  if (no) return no;
   const input = projectFromForm(fd);
   if ("error" in input) return { error: input.error };
   const store = getStore();
@@ -210,13 +255,15 @@ export async function saveProjectAction(id: string | null, _: ActionState, fd: F
 export async function markFollowedUpAction(leadId: string, fd: FormData) {
   // Read-only preview: nothing to do; the banner says so.
   if (isReadOnly()) return;
-  await markFollowedUp(getStore(), leadId, str(fd, "note"));
+  await markFollowedUp((await storeFor()).store, leadId, str(fd, "note"));
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/board");
 }
 
 export async function saveSpendAction(_: ActionState, fd: FormData): Promise<ActionState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const no = await denied("insights");
+  if (no) return no;
   const source = str(fd, "source") as LeadSource | null;
   const month = str(fd, "month");
   const amount = Number((str(fd, "amount") ?? "").replace(/[,₹\s]/g, ""));
@@ -239,6 +286,8 @@ export interface FigureState {
 /** Step 1 of the Freshness Check: show the developer's figures beside the current ones. */
 export async function compareFiguresAction(id: string, _: FigureState, fd: FormData): Promise<FigureState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const no = await denied("projects.edit");
+  if (no) return no;
   const project = await getStore().getProject(id);
   if (!project) return { error: "Project not found." };
   const reply = figuresFromForm(fd, project);
@@ -249,6 +298,8 @@ export async function compareFiguresAction(id: string, _: FigureState, fd: FormD
 /** Step 2: write only the ticked changes and mark the project confirmed now. */
 export async function acceptFiguresAction(id: string, reply: Partial<ProjectInput>, _: FigureState, fd: FormData): Promise<FigureState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const no = await denied("projects.edit");
+  if (no) return no;
   const accepted = fd.getAll("accept").filter((v): v is FigureKey => typeof v === "string" && v in FIGURE_LABEL);
   await getStore().updateProject(id, acceptedPatch(reply, accepted, str(fd, "confirmed_by")));
   revalidatePath(`/projects/${id}`);
@@ -258,7 +309,10 @@ export async function acceptFiguresAction(id: string, reply: Partial<ProjectInpu
 
 export async function sendWhatsAppReplyAction(leadId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
-  const store = getStore();
+  const no = await denied();
+  if (no) return no;
+  const { store } = await storeFor();
+  if (!(await store.getLead(leadId))) return { error: "Lead not found." };
   const r = await sendManualReply(store, catcherConfig(), {
     leadId,
     body: String(fd.get("body") ?? ""),
@@ -273,12 +327,14 @@ export async function sendWhatsAppReplyAction(leadId: string, _: ActionState, fd
 export async function setAutoWhatsAppAction(leadId: string, allowed: boolean) {
   // Read-only preview: nothing to do; the banner says so.
   if (isReadOnly()) return;
-  await setAutoWhatsApp(getStore(), leadId, allowed);
+  await setAutoWhatsApp((await storeFor("leads.control")).store, leadId, allowed);
   revalidatePath(`/leads/${leadId}`);
 }
 
 export async function saveWhatsAppSettingsAction(_: ActionState, fd: FormData): Promise<ActionState> {
   if (isReadOnly()) return { error: new ReadOnlyError().message };
+  const no = await denied("settings");
+  if (no) return no;
   const { patch, invalid } = settingsFromForm(fd);
   if (invalid.length) return { error: `Not a valid phone number: ${invalid.join(", ")}` };
   await getStore().updateWhatsAppSettings(patch);
