@@ -27,8 +27,6 @@ create table team_members (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
--- Exactly one owner: two people racing through first-time setup cannot both become owner.
-create unique index team_members_one_owner on team_members ((true)) where role = 'owner';
 
 create table team_sessions (
   id uuid primary key default gen_random_uuid(),

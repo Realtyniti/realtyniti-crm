@@ -40,7 +40,7 @@ async function newOwner() {
 }
 
 /** Adds someone and has them set their password from the link. */
-async function join(name: string, phone: string, role: "manager" | "agent") {
+async function join(name: string, phone: string, role: "owner" | "manager" | "agent") {
   const { member, token } = await addMember(auth, owner, { name, phone, role });
   const s = await acceptInvite(auth, { token, password: PW, confirm: PW });
   return { member, session: s.token };
@@ -151,12 +151,18 @@ describe("team members and invite links", () => {
     expect(await inviteFor(auth, token, new Date(Date.now() + 8 * 24 * 3600_000))).toBeNull();
   });
 
-  it("only the owner adds people, and nobody can be made a second owner", async () => {
+  it("only an owner adds people; there can be several owners, and nobody can lock themselves out", async () => {
     const { member: mgr } = await join("Manager", "9876500001", "manager");
     await expect(addMember(auth, mgr, { name: "B", phone: "9876500002", role: "agent" })).rejects.toThrow(/Only the owner/);
-    await expect(addMember(auth, owner, { name: "B", phone: "9876500002", role: "owner" })).rejects.toThrow(/Manager, Agent or Reviewer/);
-    await expect(changeRole(auth, owner, mgr.id, "owner")).rejects.toThrow(/Manager, Agent or Reviewer/);
-    await expect(changeRole(auth, owner, owner.id, "agent")).rejects.toThrow(/owner login/);
+    const { member: second, session } = await join("Deepika", "7678684760", "owner");
+    expect(second.role).toBe("owner");
+    expect(await resolveSession(auth, session)).toMatchObject({ role: "owner" });
+    // The second owner can manage the team, including the first owner, but not their own login.
+    const secondOwner = (await resolveSession(auth, session))!;
+    await expect(changeRole(auth, secondOwner, mgr.id, "owner")).resolves.toMatchObject({ role: "owner" });
+    await expect(changeRole(auth, owner, owner.id, "agent")).rejects.toThrow(/your own login/);
+    await expect(deactivateMember(auth, owner, owner.id)).rejects.toThrow(/your own login/);
+    await expect(changeRole(auth, owner, mgr.id, "boss")).rejects.toThrow(/Pick Owner/);
   });
 
   it("refuses a mobile number already on the team", async () => {
@@ -213,11 +219,11 @@ describe("deactivate", () => {
     expect(await inviteFor(auth, token)).toBeNull();
   });
 
-  it("only the owner deactivates, and the owner can't be deactivated", async () => {
+  it("only an owner deactivates, and never their own login", async () => {
     const { member: mgr } = await join("Manager", "9876500001", "manager");
     const { member: agent } = await join("Agent", "9876500002", "agent");
     await expect(deactivateMember(auth, mgr, agent.id)).rejects.toThrow(/Only the owner/);
-    await expect(deactivateMember(auth, owner, owner.id)).rejects.toThrow(/owner login/);
+    await expect(deactivateMember(auth, owner, owner.id)).rejects.toThrow(/your own login/);
   });
 
   it("reactivating lets them back in with their old password", async () => {

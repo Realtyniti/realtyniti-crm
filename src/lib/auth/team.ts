@@ -140,7 +140,7 @@ export async function addMember(
   input: { name: string; phone: string; role: string },
 ): Promise<{ member: Member; token: string }> {
   if (actor.role !== "owner") throw new AuthError("Only the owner can add people.");
-  if (!isRole(input.role) || input.role === "owner") throw new AuthError("Pick Manager, Agent or Reviewer.");
+  if (!isRole(input.role)) throw new AuthError("Pick Owner, Manager, Agent or Reviewer.");
   const name = cleanName(input.name);
   const phone = cleanPhone(input.phone);
   let row: MemberRow;
@@ -201,7 +201,8 @@ async function editable(auth: AuthStore, actor: Member, memberId: string): Promi
   if (actor.role !== "owner") throw new AuthError("Only the owner can change the team.");
   const row = await auth.getMember(memberId);
   if (!row) throw new AuthError("That person is not on the team.");
-  if (row.role === "owner") throw new AuthError("The owner login can't be changed here.");
+  // Another owner can change this login; nobody can lock themselves out, so an active owner always remains.
+  if (row.id === actor.id) throw new AuthError("You can't change your own login here. Use My account, or ask another owner.");
   return row;
 }
 
@@ -226,7 +227,7 @@ export async function reactivateMember(auth: AuthStore, actor: Member, memberId:
 
 export async function changeRole(auth: AuthStore, actor: Member, memberId: string, role: string) {
   const row = await editable(auth, actor, memberId);
-  if (!isRole(role) || role === "owner") throw new AuthError("Pick Manager, Agent or Reviewer.");
+  if (!isRole(role)) throw new AuthError("Pick Owner, Manager, Agent or Reviewer.");
   return toMember(await auth.updateMember(row.id, { role }));
 }
 

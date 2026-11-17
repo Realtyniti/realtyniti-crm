@@ -84,7 +84,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                   </div>
                 </div>
               </div>
-              {m.role !== "owner" && (
+              {m.id !== me.id && (
                 <div className="sm:max-w-[60%]">
                   <MemberControls
                     member={{ id: m.id, name: m.name, phone: m.phone, role: m.role, active: m.active }}

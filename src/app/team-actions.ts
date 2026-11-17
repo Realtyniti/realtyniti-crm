@@ -200,7 +200,7 @@ export async function changeRoleAction(memberId: string, _: TeamState, fd: FormD
     const me = await actor("team");
     const member = await changeRole(getAuthStore(), me, memberId, str(fd, "role"));
     revalidatePath("/team");
-    return { ok: `${member.name} is now ${{ owner: "the Owner", manager: "a Manager", agent: "an Agent", reviewer: "a view-only Reviewer" }[member.role]}.` };
+    return { ok: `${member.name} is now ${{ owner: "an Owner", manager: "a Manager", agent: "an Agent", reviewer: "a view-only Reviewer" }[member.role]}.` };
   });
 }
 

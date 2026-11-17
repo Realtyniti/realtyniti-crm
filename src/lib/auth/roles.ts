@@ -6,8 +6,8 @@
 export const ROLES = ["owner", "manager", "agent", "reviewer"] as const;
 export type Role = (typeof ROLES)[number];
 
-/** Roles the owner can hand out. There is exactly one owner: the person who set the CRM up. */
-export const ASSIGNABLE_ROLES = ["manager", "agent", "reviewer"] as const satisfies readonly Role[];
+/** Roles an owner can hand out. There can be several owners; an owner can't change or switch off their own login. */
+export const ASSIGNABLE_ROLES = ["owner", "manager", "agent", "reviewer"] as const satisfies readonly Role[];
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", manager: "Manager", agent: "Agent", reviewer: "Reviewer" };
 

@@ -61,7 +61,7 @@ export interface AuthStore {
   listMembers(): Promise<Member[]>;
   getMember(id: string): Promise<MemberRow | null>;
   findMemberByPhone(phone: string): Promise<MemberRow | null>;
-  /** Throws DuplicateError when the phone is taken, or when a second owner is added. */
+  /** Throws DuplicateError when the phone is taken. */
   insertMember(m: { name: string; phone: string; role: Role; password_hash?: string | null }): Promise<MemberRow>;
   updateMember(id: string, patch: MemberPatch): Promise<MemberRow>;
 
@@ -124,7 +124,6 @@ export class MemoryAuthStore implements AuthStore {
   }
   async insertMember(m: { name: string; phone: string; role: Role; password_hash?: string | null }) {
     if (await this.findMemberByPhone(m.phone)) throw new DuplicateError("That mobile number is already on the team.");
-    if (m.role === "owner" && [...this.members.values()].some((x) => x.role === "owner")) throw new DuplicateError("The CRM already has an owner.");
     const now = new Date().toISOString();
     const row: MemberRow = {
       id: randomUUID(),
@@ -146,7 +145,6 @@ export class MemoryAuthStore implements AuthStore {
   async updateMember(id: string, patch: MemberPatch) {
     const row = this.members.get(id);
     if (!row) throw new Error("No such member");
-    if (patch.role === "owner" && row.role !== "owner") throw new DuplicateError("The CRM already has an owner.");
     if (patch.phone && patch.phone !== row.phone && (await this.findMemberByPhone(patch.phone))) {
       throw new DuplicateError("That mobile number is already on the team.");
     }
@@ -247,7 +245,7 @@ export class SupabaseAuthStore implements AuthStore {
   async insertMember(m: { name: string; phone: string; role: Role; password_hash?: string | null }) {
     const { data, error } = await this.db.from("team_members").insert(m).select(MEMBER_COLUMNS).single();
     if (error?.code === "23505") {
-      throw new DuplicateError(error.message.includes("one_owner") ? "The CRM already has an owner." : "That mobile number is already on the team.");
+      throw new DuplicateError("That mobile number is already on the team.");
     }
     if (error) throw new Error(error.message);
     return data as MemberRow;
@@ -260,7 +258,7 @@ export class SupabaseAuthStore implements AuthStore {
       .select(MEMBER_COLUMNS)
       .single();
     if (error?.code === "23505") {
-      throw new DuplicateError(error.message.includes("one_owner") ? "The CRM already has an owner." : "That mobile number is already on the team.");
+      throw new DuplicateError("That mobile number is already on the team.");
     }
     if (error) throw new Error(error.message);
     return data as MemberRow;

@@ -79,6 +79,7 @@ export function AddMemberForm({ disabled }: { disabled?: boolean }) {
               <option value="agent">Agent</option>
               <option value="manager">Manager</option>
               <option value="reviewer">Reviewer (view-only)</option>
+              <option value="owner">Owner (full control)</option>
             </select>
           </div>
           <button className="btn h-10" disabled={pending}>
@@ -113,7 +114,7 @@ export function MemberControls({
   leadCount,
   disabled,
 }: {
-  member: { id: string; name: string; phone: string; role: "manager" | "agent" | "reviewer"; active: boolean };
+  member: { id: string; name: string; phone: string; role: "owner" | "manager" | "agent" | "reviewer"; active: boolean };
   others: { id: string; name: string }[];
   leadCount: number;
   disabled?: boolean;
@@ -146,6 +147,7 @@ export function MemberControls({
                 <option value="agent">{ROLE_LABEL.agent}</option>
                 <option value="manager">{ROLE_LABEL.manager}</option>
                 <option value="reviewer">{ROLE_LABEL.reviewer}</option>
+                <option value="owner">{ROLE_LABEL.owner}</option>
               </select>
             </form>
             <form action={makeLink}>
