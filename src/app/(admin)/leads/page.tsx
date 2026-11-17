@@ -23,7 +23,7 @@ import { LEAD_VIEWS, VIEW_LABEL, type LeadQuery, type LeadView } from "@/lib/lea
 import { isReadOnly } from "@/lib/read-only";
 import { getStoreFor } from "@/lib/store";
 import { requireMember, teamOptions } from "@/lib/auth/session";
-import { can } from "@/lib/auth/roles";
+import { can, isViewOnly } from "@/lib/auth/roles";
 import { LEAD_SOURCES, type Lead, type LeadSource, type LeadStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -113,10 +113,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               Import
             </Link>
           )}
-          <Link href="/leads/new" className="btn h-9">
-            <Plus className="size-4" />
-            Add lead
-          </Link>
+          {!isViewOnly(me.role) && (
+            <Link href="/leads/new" className="btn h-9">
+              <Plus className="size-4" />
+              Add lead
+            </Link>
+          )}
         </div>
       </div>
 
@@ -350,7 +352,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             facts: requirementFacts(callLead),
           }}
           closeHref={href(query, { call: null })}
-          readOnly={isReadOnly()}
+          readOnly={isReadOnly() || isViewOnly(me.role)}
         />
       )}
     </div>

@@ -61,8 +61,8 @@ const GROUPS: { label: string | null; items: NavItem[] }[] = [
     label: "Settings",
     items: [
       { href: "/team", label: "Team", icon: UserCog, needs: "team" },
-      { href: "/templates", label: "Templates", icon: FileText, needs: "settings" },
-      { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle, needs: "settings" },
+      { href: "/templates", label: "Templates", icon: FileText, needs: "settings.view" },
+      { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle, needs: "settings.view" },
     ],
   },
 ];

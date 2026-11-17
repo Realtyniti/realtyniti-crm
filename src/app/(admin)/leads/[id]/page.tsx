@@ -36,7 +36,7 @@ import {
 import { isReadOnly } from "@/lib/read-only";
 import { getStoreFor } from "@/lib/store";
 import { requireMember, teamOptions } from "@/lib/auth/session";
-import { can } from "@/lib/auth/roles";
+import { can, isViewOnly } from "@/lib/auth/roles";
 import type { LeadEvent, WaMessage } from "@/lib/types";
 import { windowOpen } from "@/lib/whatsapp";
 import { formatSlot } from "@/lib/visits";
@@ -113,7 +113,7 @@ export default async function LeadDetailsPage({
   const control = can(me.role, "leads.control");
   const nameOf = (id: string | null | undefined) => (id ? team.find((m) => m.id === id)?.name ?? null : null);
   const visitSlots = await Promise.all(visits.map((v) => store.getSlot(v.slot_id)));
-  const readOnly = isReadOnly();
+  const readOnly = isReadOnly() || isViewOnly(me.role);
   const bookingLink = bookingUrlFor(lead.id);
   const enquiredAt = touches[0]?.received_at ?? lead.created_at;
   const missing = unansweredQuestions(lead);

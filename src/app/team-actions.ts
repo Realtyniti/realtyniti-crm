@@ -199,7 +199,7 @@ export async function changeRoleAction(memberId: string, _: TeamState, fd: FormD
     const me = await actor("team");
     const member = await changeRole(getAuthStore(), me, memberId, str(fd, "role"));
     revalidatePath("/team");
-    return { ok: `${member.name} is now ${member.role === "manager" ? "a Manager" : "an Agent"}.` };
+    return { ok: `${member.name} is now ${{ owner: "the Owner", manager: "a Manager", agent: "an Agent", reviewer: "a view-only Reviewer" }[member.role]}.` };
   });
 }
 
@@ -225,7 +225,7 @@ export async function assignLeadAction(leadId: string, memberId: string | null):
     const lead = await store.getLead(leadId);
     if (!lead) return { error: "Lead not found." };
     const to = memberId ? await auth.getMember(memberId) : null;
-    if (memberId && (!to || !to.active)) return { error: "Pick someone who is active on the team." };
+    if (memberId && (!to || !to.active || to.role === "reviewer")) return { error: "Pick someone who is active on the team." };
     if (lead.assigned_to === (to?.id ?? null)) return { ok: "No change." };
     const updated = await store.updateLead(lead.id, { assigned_to: to?.id ?? null });
     await store.addEvent({

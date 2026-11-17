@@ -77,6 +77,7 @@ export function AddMemberForm({ disabled }: { disabled?: boolean }) {
             <select id="m-role" name="role" className="input h-10" defaultValue="agent">
               <option value="agent">Agent</option>
               <option value="manager">Manager</option>
+              <option value="reviewer">Reviewer (view-only)</option>
             </select>
           </div>
           <button className="btn h-10" disabled={pending}>
@@ -91,6 +92,10 @@ export function AddMemberForm({ disabled }: { disabled?: boolean }) {
         </p>
         <p>
           <b className="font-semibold text-ink-2">Manager:</b> {ROLE_SUMMARY.manager}
+        </p>
+        <p className="sm:col-span-2">
+          <b className="font-semibold text-ink-2">Reviewer:</b> {ROLE_SUMMARY.reviewer} Any unused mobile number works as its login, e.g.
+          90000 00001.
         </p>
       </div>
       <div className="mt-2">
@@ -107,7 +112,7 @@ export function MemberControls({
   leadCount,
   disabled,
 }: {
-  member: { id: string; name: string; role: "manager" | "agent"; active: boolean };
+  member: { id: string; name: string; role: "manager" | "agent" | "reviewer"; active: boolean };
   others: { id: string; name: string }[];
   leadCount: number;
   disabled?: boolean;
@@ -138,6 +143,7 @@ export function MemberControls({
               >
                 <option value="agent">{ROLE_LABEL.agent}</option>
                 <option value="manager">{ROLE_LABEL.manager}</option>
+                <option value="reviewer">{ROLE_LABEL.reviewer}</option>
               </select>
             </form>
             <form action={makeLink}>

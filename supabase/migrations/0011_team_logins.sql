@@ -15,7 +15,8 @@ create table team_members (
   name text not null check (btrim(name) <> ''),
   -- Normalised +91XXXXXXXXXX. Used to sign in.
   phone text not null unique,
-  role text not null check (role in ('owner', 'manager', 'agent')),
+  -- reviewer: a view-only login (Meta App Review). Every write is refused and contact details are masked.
+  role text not null check (role in ('owner', 'manager', 'agent', 'reviewer')),
   -- scrypt hash (salt and parameters inside). Null until the member sets a password from their link.
   password_hash text,
   active boolean not null default true,

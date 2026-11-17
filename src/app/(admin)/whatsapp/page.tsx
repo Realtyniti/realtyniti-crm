@@ -1,14 +1,16 @@
 import { formatDateTime } from "@/lib/format";
 import { isReadOnly } from "@/lib/read-only";
-import { getStore } from "@/lib/store";
+import { getStoreFor } from "@/lib/store";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { WhatsAppSettingsForm } from "./form";
 
 export const dynamic = "force-dynamic";
 
 export default async function WhatsAppSettingsPage() {
-  await requirePermission("settings");
-  const settings = await getStore().getWhatsAppSettings();
+  const me = await requirePermission("settings.view");
+  const editor = can(me.role, "settings");
+  const settings = await getStoreFor(me).getWhatsAppSettings();
   const connected = !!process.env.WHATSAPP_PHONE_NUMBER_ID && !!process.env.WHATSAPP_TOKEN && !isReadOnly();
   const facts: [string, string][] = [
     ["Cloud API credentials", connected ? "Set: messages that pass the switches go to Meta" : "Not set: messages are recorded as dry runs"],
@@ -40,7 +42,7 @@ export default async function WhatsAppSettingsPage() {
       </section>
       <section className="panel">
         <h2 className="eyebrow mb-4">Switches</h2>
-        <WhatsAppSettingsForm settings={settings} disabled={isReadOnly()} />
+        <WhatsAppSettingsForm settings={settings} disabled={isReadOnly() || !editor} />
       </section>
       <section className="panel text-[13px] text-muted">
         <h2 className="eyebrow mb-2 text-ink">What a lead needs before the bot messages it</h2>

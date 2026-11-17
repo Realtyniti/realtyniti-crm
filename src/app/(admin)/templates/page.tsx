@@ -1,16 +1,18 @@
 import { SOURCE_LABEL } from "@/components/badges";
 import { formatDateTime } from "@/lib/format";
 import { ensureDefaultTemplates } from "@/lib/leads";
-import { getStore } from "@/lib/store";
+import { getStoreFor } from "@/lib/store";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { TemplateForm } from "./form";
 
 export const dynamic = "force-dynamic";
 
 export default async function TemplatesPage() {
-  await requirePermission("settings");
-  const store = getStore();
-  await ensureDefaultTemplates(store);
+  const me = await requirePermission("settings.view");
+  const editor = can(me.role, "settings");
+  const store = getStoreFor(me);
+  if (editor) await ensureDefaultTemplates(store);
   const templates = await store.listTemplates();
 
   return (
@@ -36,7 +38,7 @@ export default async function TemplatesPage() {
               <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Not approved</span>
             )}
           </div>
-          <TemplateForm t={t} />
+          <TemplateForm t={t} disabled={!editor} />
         </section>
       ))}
     </div>

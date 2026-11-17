@@ -25,6 +25,12 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
             Read-only preview with your real leads. Nothing you change here is saved (except signing in), and no messages are sent.
           </div>
         )}
+        {me.role === "reviewer" && (
+          <div className="flex items-center justify-center gap-2 border-b border-gold-line bg-gold-soft px-4 py-1.5 text-center text-xs text-gold-ink">
+            <Eye className="size-3.5 flex-none" />
+            View-only reviewer login: nothing can be changed or sent, and buyers&apos; phone numbers and emails are hidden.
+          </div>
+        )}
         {isDemoStore() && (
           <div className="bg-warm-soft px-4 py-1.5 text-center text-xs text-warm">
             Demo mode: Supabase is not connected, so leads are kept in memory and reset on restart.
@@ -37,9 +43,11 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
             <Link href="/" className="font-serif text-[22px] text-ink">
               RealtyNiti<span className="ml-0.5 inline-block size-1.5 rounded-full bg-gold" />
             </Link>
-            <Link href="/leads/new" className="btn ml-auto h-9 px-3" aria-label="Add lead">
-              <Plus className="size-4" />
-            </Link>
+            {me.role !== "reviewer" && (
+              <Link href="/leads/new" className="btn ml-auto h-9 px-3" aria-label="Add lead">
+                <Plus className="size-4" />
+              </Link>
+            )}
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-6 sm:px-6 lg:px-12 lg:py-9">{children}</main>

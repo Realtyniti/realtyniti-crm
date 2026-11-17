@@ -140,7 +140,7 @@ export async function addMember(
   input: { name: string; phone: string; role: string },
 ): Promise<{ member: Member; token: string }> {
   if (actor.role !== "owner") throw new AuthError("Only the owner can add people.");
-  if (!isRole(input.role) || input.role === "owner") throw new AuthError("Pick Manager or Agent.");
+  if (!isRole(input.role) || input.role === "owner") throw new AuthError("Pick Manager, Agent or Reviewer.");
   const name = cleanName(input.name);
   const phone = cleanPhone(input.phone);
   let row: MemberRow;
@@ -226,7 +226,7 @@ export async function reactivateMember(auth: AuthStore, actor: Member, memberId:
 
 export async function changeRole(auth: AuthStore, actor: Member, memberId: string, role: string) {
   const row = await editable(auth, actor, memberId);
-  if (!isRole(role) || role === "owner") throw new AuthError("Pick Manager or Agent.");
+  if (!isRole(role) || role === "owner") throw new AuthError("Pick Manager, Agent or Reviewer.");
   return toMember(await auth.updateMember(row.id, { role }));
 }
 
@@ -243,7 +243,7 @@ export async function reassignAll(auth: AuthStore, store: Store, actor: Member, 
   if (actor.role !== "owner" && actor.role !== "manager") throw new AuthError("Only the owner or a manager can reassign leads.");
   if (toId) {
     const to = await auth.getMember(toId);
-    if (!to || !to.active) throw new AuthError("Pick someone who is active on the team.");
+    if (!to || !to.active || to.role === "reviewer") throw new AuthError("Pick someone who is active on the team.");
     if (toId === fromId) throw new AuthError("Pick someone else.");
   }
   return store.reassignLeads(fromId, toId);

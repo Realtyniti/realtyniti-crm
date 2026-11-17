@@ -99,7 +99,7 @@ export function toMember(row: MemberRow): Member {
   };
 }
 
-const ROLE_ORDER: Record<Role, number> = { owner: 0, manager: 1, agent: 2 };
+const ROLE_ORDER: Record<Role, number> = { owner: 0, manager: 1, agent: 2, reviewer: 3 };
 const byRoleThenName = (a: Member, b: Member) =>
   Number(b.active) - Number(a.active) || ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.name.localeCompare(b.name);
 

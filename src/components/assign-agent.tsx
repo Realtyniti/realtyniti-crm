@@ -59,7 +59,7 @@ export function AssignAgent({
     });
   }
 
-  const choices = team.filter((m) => m.active);
+  const choices = team.filter((m) => m.active && m.role !== "reviewer");
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger

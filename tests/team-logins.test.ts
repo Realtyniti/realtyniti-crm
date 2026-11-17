@@ -18,7 +18,8 @@ import {
   signIn,
   signOut,
 } from "@/lib/auth/team";
-import { can, ROLES, type Permission } from "@/lib/auth/roles";
+import { can, isViewOnly, ROLES, type Permission } from "@/lib/auth/roles";
+import { maskedStore, maskPhone, maskText } from "@/lib/store/masked";
 import { hashToken, passwordProblem, verifyPassword } from "@/lib/auth/password";
 import { captureLead } from "@/lib/leads";
 import { MemoryStore } from "@/lib/store/memory";
@@ -152,8 +153,8 @@ describe("team members and invite links", () => {
   it("only the owner adds people, and nobody can be made a second owner", async () => {
     const { member: mgr } = await join("Manager", "9876500001", "manager");
     await expect(addMember(auth, mgr, { name: "B", phone: "9876500002", role: "agent" })).rejects.toThrow(/Only the owner/);
-    await expect(addMember(auth, owner, { name: "B", phone: "9876500002", role: "owner" })).rejects.toThrow(/Manager or Agent/);
-    await expect(changeRole(auth, owner, mgr.id, "owner")).rejects.toThrow(/Manager or Agent/);
+    await expect(addMember(auth, owner, { name: "B", phone: "9876500002", role: "owner" })).rejects.toThrow(/Manager, Agent or Reviewer/);
+    await expect(changeRole(auth, owner, mgr.id, "owner")).rejects.toThrow(/Manager, Agent or Reviewer/);
     await expect(changeRole(auth, owner, owner.id, "agent")).rejects.toThrow(/owner login/);
   });
 
@@ -371,5 +372,59 @@ describe("new-lead alerts", () => {
     const { lead } = await captureLead(store, { source: "call", phone: "9811111111" });
     delete process.env.VAPID_PUBLIC_KEY;
     expect(await notifyNewLead(auth, lead)).toBe(0);
+  });
+});
+
+describe("view-only reviewer (Meta App Review)", () => {
+  it("the owner can add one; it is never offered for assigning leads", async () => {
+    const { member, token } = await addMember(auth, owner, { name: "Meta Reviewer", phone: "90000 00001", role: "reviewer" });
+    expect(member.role).toBe("reviewer");
+    await acceptInvite(auth, { token, password: PW, confirm: PW });
+    const store = new MemoryStore();
+    const { member: a } = await join("A", "9876500002", "agent");
+    const { lead } = await captureLead(store, { source: "website", phone: "9811111111" });
+    await store.updateLead(lead.id, { assigned_to: a.id });
+    await expect(reassignAll(auth, store, owner, a.id, member.id)).rejects.toThrow(/active/);
+  });
+
+  it("has no permissions except viewing the settings screens", () => {
+    const perms: Permission[] = ["leads.all", "leads.assign", "leads.import", "leads.control", "visits.slots", "projects.edit", "insights", "settings", "team"];
+    expect(perms.filter((p) => can("reviewer", p))).toEqual([]);
+    expect(can("reviewer", "settings.view")).toBe(true);
+    expect(isViewOnly("reviewer")).toBe(true);
+    expect(isViewOnly("agent")).toBe(false);
+  });
+
+  it("sees every lead with phone numbers and emails masked, even inside notes and messages, and can't write", async () => {
+    const store = new MemoryStore();
+    const { lead } = await captureLead(store, { source: "meta", phone: "9876543210", name: "Asha", email: "asha.verma@gmail.com" });
+    await store.addEvent({ lead_id: lead.id, kind: "note", channel: null, body: "Alert to Chetan: Asha +919876543210 asked for a call, mail asha.verma@gmail.com" });
+    await store.updateWhatsAppSettings({ test_numbers: ["+918766247768"] });
+    const view = readOnly(maskedStore(store));
+
+    const seen = (await view.getLead(lead.id))!;
+    expect(seen.phone).toBe("+91 98xxx xxx10");
+    expect(seen.email).toBe("a***@gmail.com");
+    expect((await view.queryLeads({ view: "all" })).rows[0].phone).toBe("+91 98xxx xxx10");
+    const note = (await view.listEvents(lead.id)).find((e) => e.kind === "note")!;
+    expect(note.body).not.toContain("9876543210");
+    expect(note.body).not.toContain("asha.verma");
+    expect((await view.listTouches(lead.id))[0].raw).toBeNull();
+    expect((await view.getWhatsAppSettings()).test_numbers[0]).not.toContain("47768");
+    // A number typed into search can't confirm who is a lead.
+    expect((await view.queryLeads({ view: "all", q: "98765" })).total).toBe(1);
+    expect(await view.findLeadByPhone("+919876543210")).toBeNull();
+
+    await expect(view.updateLead(lead.id, { notes: "x" })).rejects.toThrow(/read-only/);
+    await expect(view.addEvent({ lead_id: lead.id, kind: "note", channel: null, body: "x" })).rejects.toThrow(/read-only/);
+    await expect(view.updateWhatsAppSettings({ outbound_enabled: true })).rejects.toThrow(/read-only/);
+    // The real data is untouched.
+    expect((await store.getLead(lead.id))!.phone).toBe("+919876543210");
+  });
+
+  it("masks short and foreign numbers safely", () => {
+    expect(maskPhone("+447700900123")).toBe("+44 77xxx xxx23");
+    expect(maskText("call 98765 43210 now")).toBe("call 98xxx xxx10 now");
+    expect(maskText("Visit at 10:30, 2 people")).toBe("Visit at 10:30, 2 people");
   });
 });

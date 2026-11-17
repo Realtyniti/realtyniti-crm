@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { can, type Permission, type Role } from "./roles";
+import { can, isViewOnly, type Permission, type Role } from "./roles";
 import { MemoryAuthStore, SupabaseAuthStore, type AuthStore, type Member } from "./store";
 import { resolveSession, SESSION_DAYS } from "./team";
 
@@ -54,6 +54,8 @@ export class PermissionError extends Error {
 export async function actor(permission?: Permission): Promise<Member> {
   const member = await currentMember();
   if (!member) throw new PermissionError("You have been signed out. Sign in again.");
+  // Every server action goes through here: a view-only login can never change anything.
+  if (isViewOnly(member.role)) throw new PermissionError("This is a view-only reviewer login. Nothing can be changed.");
   if (permission && !can(member.role, permission)) throw new PermissionError();
   return member;
 }
