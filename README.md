@@ -70,6 +70,22 @@ Replace them with his own wording; everything else reads from that file.
   change; only accepted figures are written and the project turns green.
 - The 9 AM digest now also lists offers ending within 3 days and projects to re-confirm.
 
+## Team logins and the phone app
+
+- Everyone signs in with their own mobile number and password (`/login`). Roles (`src/lib/auth/roles.ts`):
+  **Owner** sees and controls everything; **Manager** sees all leads, assigns them, imports, opens visit slots and edits
+  projects, but can't change Templates, WhatsApp or the Team; **Agent** sees only leads assigned to them (enforced in the
+  store itself, `src/lib/store/scoped.ts`), can't import, export, delete, assign or change settings.
+- First setup: the first person to open the CRM creates the owner login, which needs the old `ADMIN_PASSWORD` once.
+- `/team` (owner): add a manager or agent and send them a one-time link (7 days) to choose their password; change role;
+  new login link (signs them out everywhere); **Deactivate** deletes all their sessions, links and alert subscriptions so
+  the login stops on every device at the next click, while their leads stay assigned until moved ("Move their leads to").
+- Sessions: a random cookie token (only its SHA-256 is stored, 30 days, sliding); passwords are scrypt hashes; 5 wrong
+  tries pause a login for 15 minutes. Every page, server action and admin API route checks the session in the database.
+- PWA: `src/app/manifest.ts`, `public/sw.js` (alerts and an offline page; lead screens are never cached), icons in
+  `public/icons`. `/account` shows install steps (Android button, iPhone Share > Add to Home Screen) and turns new-lead
+  alerts on per device. Owner and managers get every new lead; agents get leads assigned to them. Needs `VAPID_*` keys.
+
 ## Run locally
 
 ```bash

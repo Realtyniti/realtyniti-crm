@@ -1,4 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { getAuthStore } from "@/lib/auth/session";
+import { normalisePhone } from "@/lib/phone";
+import { notifyNewLead } from "@/lib/push";
 import { handleInbound, handleReceipt } from "@/lib/catcher";
 import { catcherConfig } from "@/lib/catcher-config";
 import { verifyMetaSignature } from "@/lib/intake/meta";
@@ -29,7 +32,10 @@ export async function POST(req: Request) {
   const cfg = catcherConfig();
   for (const msg of inboundMessages(body)) {
     try {
-      await handleInbound(store, cfg, msg);
+      const phone = normalisePhone(msg.from);
+      const isNew = !!phone && !(await store.findLeadByPhone(phone));
+      const lead = await handleInbound(store, cfg, msg);
+      if (isNew) after(() => notifyNewLead(getAuthStore(), lead));
     } catch (e) {
       // Logged, not retried: the message is already on the card, and a retry could double-send.
       console.error("whatsapp inbound failed", msg.id, e);

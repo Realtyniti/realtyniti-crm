@@ -37,6 +37,7 @@ export class MemoryStore implements Store {
       .filter((l) => !filter.temperature || l.temperature === filter.temperature)
       .filter((l) => !filter.status || l.status === filter.status)
       .filter((l) => filter.needsChetan === undefined || l.needs_chetan === filter.needsChetan)
+      .filter((l) => !filter.assignedTo || l.assigned_to === filter.assignedTo)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
 
@@ -47,13 +48,13 @@ export class MemoryStore implements Store {
     return { rows: all.slice((page - 1) * size, page * size), total: all.length };
   }
 
-  async countLeads(views: readonly LeadView[]) {
-    const leads = [...this.leads.values()];
+  async countLeads(views: readonly LeadView[], assignedTo?: string) {
+    const leads = [...this.leads.values()].filter((l) => !assignedTo || l.assigned_to === assignedTo);
     return Object.fromEntries(views.map((v) => [v, leads.filter((l) => matchesView(l, v)).length])) as Record<LeadView, number>;
   }
 
-  async leadFacts() {
-    return [...this.leads.values()].map(({ property_type, budget_min_inr, budget_max_inr, micro_market, status }) => ({
+  async leadFacts(assignedTo?: string) {
+    return [...this.leads.values()].filter((l) => !assignedTo || l.assigned_to === assignedTo).map(({ property_type, budget_min_inr, budget_max_inr, micro_market, status }) => ({
       property_type,
       budget_min_inr,
       budget_max_inr,
@@ -75,7 +76,7 @@ export class MemoryStore implements Store {
     if (await this.findLeadByPhone(lead.phone)) throw new Error(`duplicate phone ${lead.phone}`);
     checkLost(lead);
     const now = new Date().toISOString();
-    const row: Lead = { ...lead, id: randomUUID(), created_at: now, updated_at: now };
+    const row: Lead = { ...lead, assigned_to: lead.assigned_to ?? null, id: randomUUID(), created_at: now, updated_at: now };
     this.leads.set(row.id, row);
     return row;
   }
@@ -164,9 +165,20 @@ export class MemoryStore implements Store {
     return row;
   }
 
+  async reassignLeads(from: string, to: string | null) {
+    let moved = 0;
+    for (const l of this.leads.values()) {
+      if (l.assigned_to !== from) continue;
+      this.leads.set(l.id, { ...l, assigned_to: to, updated_at: new Date().toISOString() });
+      moved++;
+    }
+    return moved;
+  }
+
   async listVisits(filter: VisitFilter = {}) {
     return [...this.visits.values()]
       .filter((v) => !filter.leadId || v.lead_id === filter.leadId)
+      .filter((v) => !filter.leadIds || filter.leadIds.includes(v.lead_id))
       .filter((v) => !filter.slotId || v.slot_id === filter.slotId)
       .filter((v) => !filter.slotIds || filter.slotIds.includes(v.slot_id))
       .filter((v) => !filter.status || v.status === filter.status)

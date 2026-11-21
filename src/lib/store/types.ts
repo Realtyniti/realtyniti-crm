@@ -1,7 +1,7 @@
 import type { LeadPage, LeadQuery, LeadView } from "../lead-views";
 import type { ChannelSpend, Lead, LeadEvent, LeadTouch, MessageTemplate, NewWaMessage, Project, ProjectInput, SiteVisit, VisitSlot, WaMessage, WhatsAppSettings } from "../types";
 
-export type NewLead = Omit<Lead, "id" | "created_at" | "updated_at">;
+export type NewLead = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to"> & { assigned_to?: string | null };
 export type LeadPatch = Partial<Omit<Lead, "id" | "created_at" | "updated_at">>;
 
 /** The few requirement fields the dashboard's market brief counts, for every lead. */
@@ -11,6 +11,8 @@ export interface LeadFilter {
   temperature?: Lead["temperature"];
   status?: Lead["status"];
   needsChetan?: boolean;
+  /** Only leads assigned to this member (an agent's own leads). */
+  assignedTo?: string;
 }
 
 /** Everything the app needs from storage. Supabase in production, memory for local demo and tests. */
@@ -20,11 +22,12 @@ export interface Store {
   listLeads(filter?: LeadFilter): Promise<Lead[]>;
   /** One page of the Leads screen, filtered and sorted by the database. */
   queryLeads(query: LeadQuery): Promise<LeadPage>;
-  countLeads(views: readonly LeadView[]): Promise<Record<LeadView, number>>;
+  /** With assignedTo, counts only that member's leads. */
+  countLeads(views: readonly LeadView[], assignedTo?: string): Promise<Record<LeadView, number>>;
   /** When each lead first enquired (earliest touch), which can be earlier than the card's created_at for imports. */
   firstTouchAt(leadIds: string[]): Promise<Record<string, string>>;
   /** Requirement fields of every lead, for the dashboard's market brief. */
-  leadFacts(): Promise<LeadFacts[]>;
+  leadFacts(assignedTo?: string): Promise<LeadFacts[]>;
   insertLead(lead: NewLead): Promise<Lead>;
   updateLead(id: string, patch: LeadPatch): Promise<Lead>;
 
@@ -51,6 +54,8 @@ export interface Store {
   updateSlot(id: string, patch: Partial<Omit<VisitSlot, "id" | "created_at">>): Promise<VisitSlot>;
 
   listVisits(filter?: VisitFilter): Promise<SiteVisit[]>;
+  /** Moves every lead assigned to one member to another (or to nobody). Returns how many moved. */
+  reassignLeads(from: string, to: string | null): Promise<number>;
   insertVisit(visit: Omit<SiteVisit, "id" | "created_at" | "reminder_evening_sent_at" | "reminder_2h_sent_at">): Promise<SiteVisit>;
   updateVisit(id: string, patch: Partial<Omit<SiteVisit, "id" | "created_at">>): Promise<SiteVisit>;
 
@@ -84,6 +89,7 @@ export interface Store {
 
 export interface VisitFilter {
   leadId?: string;
+  leadIds?: string[];
   slotId?: string;
   slotIds?: string[];
   status?: SiteVisit["status"];

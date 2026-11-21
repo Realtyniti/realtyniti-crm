@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
+import { apiDenied } from "@/lib/auth/api";
 import { connectLeadgen } from "@/lib/intake/meta";
 
 /**
  * Wires Meta lead ads to the CRM using the secrets already in Vercel, so they never
- * have to be pasted anywhere else. Behind the CRM password like every admin screen.
+ * have to be pasted anywhere else. Owner only, like every admin screen.
  */
 export async function POST() {
+  // Meta settings are the owner's alone.
+  const denied = await apiDenied("settings");
+  if (denied) return denied;
   const env = process.env;
   const pageIds = (env.META_PAGE_BRANDS ?? "").split(",").map((p) => p.split("=")[0].trim()).filter(Boolean);
   const missing = ["META_APP_ID", "META_APP_SECRET", "META_PAGE_ACCESS_TOKEN", "META_VERIFY_TOKEN"].filter((k) => !env[k]);

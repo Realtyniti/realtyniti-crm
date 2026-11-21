@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { AlarmClock, CalendarDays, ChevronLeft, ChevronRight, MessageCircle, Phone, Plus, Search, SlidersHorizontal, Upload } from "lucide-react";
 import { Avatar, NameFlag, SOURCE_LABEL, STATUS_LABEL, TemperatureBadge } from "@/components/badges";
-import { AssignAgent } from "@/components/assign-agent";
+import { AssignAgent, type TeamOption } from "@/components/assign-agent";
 import { CallAssistant } from "@/components/calling/call-assistant";
 import { LeadRowMenu } from "@/components/lead-row-menu";
 import { formatDate } from "@/lib/format";
@@ -21,7 +21,9 @@ import {
 } from "@/lib/lead-display";
 import { LEAD_VIEWS, VIEW_LABEL, type LeadQuery, type LeadView } from "@/lib/lead-views";
 import { isReadOnly } from "@/lib/read-only";
-import { getStore } from "@/lib/store";
+import { getStoreFor } from "@/lib/store";
+import { requireMember, teamOptions } from "@/lib/auth/session";
+import { can, isViewOnly } from "@/lib/auth/roles";
 import { LEAD_SOURCES, type Lead, type LeadSource, type LeadStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -40,19 +42,21 @@ function parse(p: Params): Required<Pick<LeadQuery, "view" | "page" | "sort">> &
     source: LEAD_SOURCES.includes(p.source as LeadSource) ? (p.source as LeadSource) : null,
     status: STATUSES.includes(p.status as LeadStatus) ? (p.status as LeadStatus) : null,
     budget: p.budget === "known" || p.budget === "unknown" ? p.budget : null,
+    assignee: p.who?.trim() ? p.who.trim().slice(0, 40) : null,
     sort: p.sort === "recent" ? "recent" : "followup",
     page: Math.max(1, Number(p.page) || 1),
     pageSize: PAGE_SIZE,
   };
 }
 
-function href(q: ReturnType<typeof parse>, patch: Partial<Record<keyof LeadQuery | "call", string | number | null>>) {
+function href(q: ReturnType<typeof parse>, patch: Partial<Record<keyof LeadQuery | "call" | "who", string | number | null>>) {
   const merged: Record<string, string | number | null | undefined> = {
     view: q.view === "open" ? null : q.view,
     q: q.q,
     source: q.source,
     status: q.status,
     budget: q.budget,
+    who: q.assignee,
     sort: q.sort === "followup" ? null : q.sort,
     page: q.page === 1 ? null : q.page,
     ...patch,
@@ -66,15 +70,21 @@ function href(q: ReturnType<typeof parse>, patch: Partial<Record<keyof LeadQuery
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
   const query = parse(params);
-  const store = getStore();
-  const [{ rows, total }, counts, callLead] = await Promise.all([
+  const me = await requireMember();
+  const store = getStoreFor(me);
+  const assigner = can(me.role, "leads.assign");
+  if (!assigner) query.assignee = null;
+  else if (query.assignee === "me") query.assignee = me.id;
+  const [{ rows, total }, counts, callLead, team] = await Promise.all([
     store.queryLeads(query),
     store.countLeads(QUICK_VIEWS),
     params.call ? store.getLead(params.call) : Promise.resolve(null),
+    teamOptions(me),
   ]);
+  const agentName = (id: string | null) => team.find((m) => m.id === id)?.name ?? null;
   const enquired = await store.firstTouchAt(rows.map((r) => r.id));
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const advanced = [query.source, query.status, query.budget, query.sort === "recent" ? "x" : null].filter(Boolean).length;
+  const advanced = [query.source, query.status, query.budget, query.assignee, query.sort === "recent" ? "x" : null].filter(Boolean).length;
   const from = total === 0 ? 0 : (query.page - 1) * PAGE_SIZE + 1;
   // With the Calling Assistant open the list keeps only what a caller needs; the panel shows the requirement.
   const cols = columnClasses(!!callLead);
@@ -97,14 +107,18 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           )}
         </div>
         <div className="flex gap-2">
-          <Link href="/import" className="btn-ghost h-9">
-            <Upload className="size-4" />
-            Import
-          </Link>
-          <Link href="/leads/new" className="btn h-9">
-            <Plus className="size-4" />
-            Add lead
-          </Link>
+          {can(me.role, "leads.import") && (
+            <Link href="/import" className="btn-ghost h-9">
+              <Upload className="size-4" />
+              Import
+            </Link>
+          )}
+          {!isViewOnly(me.role) && (
+            <Link href="/leads/new" className="btn h-9">
+              <Plus className="size-4" />
+              Add lead
+            </Link>
+          )}
         </div>
       </div>
 
@@ -197,6 +211,26 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 <option value="unknown">Budget not asked yet</option>
               </select>
             </div>
+            {assigner && (
+              <div>
+                <label htmlFor="f-who" className="label">
+                  Assigned to
+                </label>
+                <select id="f-who" name="who" defaultValue={query.assignee === me.id ? "me" : (query.assignee ?? "")} className="input">
+                  <option value="">Anyone</option>
+                  <option value="me">Me</option>
+                  <option value="none">Unassigned</option>
+                  {team
+                    .filter((m) => m.id !== me.id)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {m.active ? "" : " (deactivated)"}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
             <div>
               <label htmlFor="f-sort" className="label">
                 Sort by
@@ -207,7 +241,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               </select>
             </div>
             <div className="flex gap-2 pt-1">
-              <Link href={href(query, { source: null, status: null, budget: null, sort: null, page: null })} className="btn-ghost flex-1">
+              <Link href={href(query, { source: null, status: null, budget: null, who: null, sort: null, page: null })} className="btn-ghost flex-1">
                 Reset
               </Link>
               <button className="btn flex-1">Apply</button>
@@ -257,7 +291,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                           </td>
                         </tr>
                       )}
-                      <LeadRow lead={l} enquiredAt={enquired[l.id] ?? l.created_at} callHref={href(query, { call: l.id })} selected={callLead?.id === l.id} cols={cols} first={newGroup} />
+                      <LeadRow lead={l} enquiredAt={enquired[l.id] ?? l.created_at} callHref={href(query, { call: l.id })} selected={callLead?.id === l.id} cols={cols} first={newGroup} team={team} canAssign={assigner} />
                     </Fragment>
                   );
                 })}
@@ -268,7 +302,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             {/* Phones and small tablets: cards */}
             <ul className="divide-y divide-line md:hidden">
               {rows.map((l) => (
-                <LeadCard key={l.id} lead={l} callHref={href(query, { call: l.id })} />
+                <LeadCard key={l.id} lead={l} callHref={href(query, { call: l.id })} team={team} canAssign={assigner} />
               ))}
             </ul>
 
@@ -314,11 +348,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             name: callLead.name,
             phone: callLead.phone,
             temperature: callLead.temperature,
-            agent: null,
+            agent: agentName(callLead.assigned_to),
             facts: requirementFacts(callLead),
           }}
           closeHref={href(query, { call: null })}
-          readOnly={isReadOnly()}
+          readOnly={isReadOnly() || isViewOnly(me.role)}
         />
       )}
     </div>
@@ -394,7 +428,11 @@ function LeadRow({
   selected,
   cols,
   first,
+  team,
+  canAssign,
 }: {
+  team: TeamOption[];
+  canAssign: boolean;
   lead: Lead;
   enquiredAt: string;
   callHref: string;
@@ -434,7 +472,7 @@ function LeadRow({
         <TemperatureBadge value={l.temperature} />
       </td>
       <td className={`px-4 py-3 ${cols.agent}`}>
-        <AssignAgent agent={null} />
+        <AssignAgent leadId={l.id} agentId={l.assigned_to} team={team} canAssign={canAssign} />
       </td>
       <td className="px-4 py-3 whitespace-nowrap">
         <FollowUp iso={l.next_follow_up_at} />
@@ -451,7 +489,7 @@ function LeadRow({
   );
 }
 
-function LeadCard({ lead: l, callHref }: { lead: Lead; callHref: string }) {
+function LeadCard({ lead: l, callHref, team, canAssign }: { lead: Lead; callHref: string; team: TeamOption[]; canAssign: boolean }) {
   const facts = [propertyLabel(l.property_type), budgetLabel(l), l.micro_market].filter(Boolean).join(" · ");
   return (
     <li className="px-4 py-3.5">
@@ -471,7 +509,7 @@ function LeadCard({ lead: l, callHref }: { lead: Lead; callHref: string }) {
             <span>
               Follow-up: <FollowUp iso={l.next_follow_up_at} />
             </span>
-            <AssignAgent agent={null} compact />
+            <AssignAgent leadId={l.id} agentId={l.assigned_to} team={team} canAssign={canAssign} compact />
           </div>
           <div className="mt-2.5 flex items-center gap-2">
             <Link href={callHref} scroll={false} className="btn-call h-9 flex-1">

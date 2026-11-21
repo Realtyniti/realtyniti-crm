@@ -1,7 +1,7 @@
 import { ReadOnlyError } from "../read-only";
 import type { Store } from "./types";
 
-const WRITE = /^(insert|update|upsert|add)/;
+const WRITE = /^(insert|update|upsert|add|reassign)/;
 
 /** Every write method throws; reads pass straight through. */
 export function readOnly(store: Store): Store {

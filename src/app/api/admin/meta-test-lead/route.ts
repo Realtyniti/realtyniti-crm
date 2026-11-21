@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiDenied } from "@/lib/auth/api";
 import { graph, metaPageFor, pageAccessToken, type MetaForm } from "@/lib/intake/meta";
 
 /**
@@ -7,6 +8,9 @@ import { graph, metaPageFor, pageAccessToken, type MetaForm } from "@/lib/intake
  * Meta allows one test lead per form; an earlier one is deleted first.
  */
 export async function POST() {
+  // Meta settings are the owner's alone.
+  const denied = await apiDenied("settings");
+  if (denied) return denied;
   const env = process.env;
   const appSecret = env.META_APP_SECRET ?? null;
   const pageId = (env.META_PAGE_BRANDS ?? "").split(",")[0]?.split("=")[0]?.trim();

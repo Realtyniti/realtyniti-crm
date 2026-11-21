@@ -34,7 +34,9 @@ import {
   whatsappUrl,
 } from "@/lib/lead-display";
 import { isReadOnly } from "@/lib/read-only";
-import { getStore } from "@/lib/store";
+import { getStoreFor } from "@/lib/store";
+import { requireMember, teamOptions } from "@/lib/auth/session";
+import { can, isViewOnly } from "@/lib/auth/roles";
 import type { LeadEvent, WaMessage } from "@/lib/types";
 import { windowOpen } from "@/lib/whatsapp";
 import { formatSlot } from "@/lib/visits";
@@ -96,18 +98,22 @@ export default async function LeadDetailsPage({
   const { id } = await params;
   const { call, tab: rawTab } = await searchParams;
   const tab = rawTab === "calls" || rawTab === "messages" ? rawTab : null;
-  const store = getStore();
+  const me = await requireMember();
+  const store = getStoreFor(me);
   const lead = await store.getLead(id);
   if (!lead) notFound();
-  const [touches, events, visits, waMessages, waSettings] = await Promise.all([
+  const [touches, events, visits, waMessages, waSettings, team] = await Promise.all([
     store.listTouches(id),
     store.listEvents(id),
     store.listVisits({ leadId: id }),
     store.listWaMessages(id),
     store.getWhatsAppSettings(),
+    teamOptions(me),
   ]);
+  const control = can(me.role, "leads.control");
+  const nameOf = (id: string | null | undefined) => (id ? team.find((m) => m.id === id)?.name ?? null : null);
   const visitSlots = await Promise.all(visits.map((v) => store.getSlot(v.slot_id)));
-  const readOnly = isReadOnly();
+  const readOnly = isReadOnly() || isViewOnly(me.role);
   const bookingLink = bookingUrlFor(lead.id);
   const enquiredAt = touches[0]?.received_at ?? lead.created_at;
   const missing = unansweredQuestions(lead);
@@ -127,7 +133,10 @@ export default async function LeadDetailsPage({
       at: e.created_at,
       icon: EVENT[e.kind].icon,
       tone: EVENT[e.kind].tone,
-      title: EVENT[e.kind].label + (e.channel && e.kind.startsWith("message") ? ` · ${SOURCE_LABEL[e.channel]}` : ""),
+      title:
+        EVENT[e.kind].label +
+        (e.channel && e.kind.startsWith("message") ? ` · ${SOURCE_LABEL[e.channel]}` : "") +
+        (e.kind === "note" && nameOf(e.actor_id) ? ` · ${nameOf(e.actor_id)}` : ""),
       body: e.body,
     })),
     ...touches.map((t): TimelineItem => ({
@@ -209,7 +218,7 @@ export default async function LeadDetailsPage({
           <div className="border-r border-b lg:border-b-0">
             <dt className="eyebrow">Assigned agent</dt>
             <dd className="mt-1">
-              <AssignAgent agent={null} />
+              <AssignAgent leadId={lead.id} agentId={lead.assigned_to} team={team} canAssign={can(me.role, "leads.assign")} />
             </dd>
           </div>
           <div className="border-b lg:border-r lg:border-b-0">
@@ -245,11 +254,15 @@ export default async function LeadDetailsPage({
           <span>
             <strong>Needs a personal reply:</strong> {lead.needs_chetan_reason}. No automated message goes out until this is cleared.
           </span>
-          <form action={clearFlagAction.bind(null, lead.id)}>
-            <button className="btn-ghost h-8" disabled={readOnly}>
-              I&apos;ve handled it
-            </button>
-          </form>
+          {control ? (
+            <form action={clearFlagAction.bind(null, lead.id)}>
+              <button className="btn-ghost h-8" disabled={readOnly}>
+                I&apos;ve handled it
+              </button>
+            </form>
+          ) : (
+            <span className="text-[12.5px]">The owner or a manager clears this.</span>
+          )}
         </div>
       )}
 
@@ -465,11 +478,13 @@ export default async function LeadDetailsPage({
                 ? "The bot may reply, and approved follow-ups may go out, while automation is switched on."
                 : "No bot reply, follow-up or reminder goes to this lead. Your own replies still work."}
             </p>
-            <form action={setAutoWhatsAppAction.bind(null, lead.id, !lead.wa_auto_allowed)} className="mt-3">
-              <button className="btn-ghost h-9 w-full" disabled={readOnly}>
-                {lead.wa_auto_allowed ? "Stop automatic messages" : "Allow automatic messages"}
-              </button>
-            </form>
+            {control && (
+              <form action={setAutoWhatsAppAction.bind(null, lead.id, !lead.wa_auto_allowed)} className="mt-3">
+                <button className="btn-ghost h-9 w-full" disabled={readOnly}>
+                  {lead.wa_auto_allowed ? "Stop automatic messages" : "Allow automatic messages"}
+                </button>
+              </form>
+            )}
           </section>
 
           <section className="panel">
@@ -523,7 +538,7 @@ export default async function LeadDetailsPage({
 
       {call && (
         <CallAssistant
-          lead={{ id: lead.id, name: lead.name, phone: lead.phone, temperature: lead.temperature, agent: null, facts: requirementFacts(lead) }}
+          lead={{ id: lead.id, name: lead.name, phone: lead.phone, temperature: lead.temperature, agent: nameOf(lead.assigned_to), facts: requirementFacts(lead) }}
           closeHref={`/leads/${lead.id}${tab ? `?tab=${tab}` : ""}`}
           readOnly={readOnly}
         />

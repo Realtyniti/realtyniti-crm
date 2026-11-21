@@ -2,10 +2,12 @@ import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
 import { comparisonNote, freshness } from "@/lib/projects";
 import { getStore } from "@/lib/store";
+import { requireMember } from "@/lib/auth/session";
 
 export default async function ComparePage({ searchParams }: { searchParams: Promise<{ ids?: string | string[] }> }) {
   const { ids } = await searchParams;
   const list = (Array.isArray(ids) ? ids : ids ? [ids] : []).slice(0, 3);
+  await requireMember();
   const store = getStore();
   const projects = (await Promise.all(list.map((id) => store.getProject(id)))).filter((p) => p !== null);
   const stale = projects.filter((p) => freshness(p) !== "green");

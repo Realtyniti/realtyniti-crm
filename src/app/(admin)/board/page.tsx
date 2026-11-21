@@ -4,7 +4,8 @@ import { buildBoard } from "@/lib/board";
 import { requirementLine } from "@/lib/catcher";
 import { displayName } from "@/lib/display-name";
 import { formatDate } from "@/lib/format";
-import { getStore } from "@/lib/store";
+import { getStoreFor } from "@/lib/store";
+import { requireMember } from "@/lib/auth/session";
 import type { Lead } from "@/lib/types";
 import { formatSlot, slotsWithBookings } from "@/lib/visits";
 
@@ -33,7 +34,8 @@ function Section({ title, count, children, tone }: { title: string; count: numbe
 }
 
 export default async function BoardPage() {
-  const store = getStore();
+  const me = await requireMember();
+  const store = getStoreFor(me);
   const now = new Date();
   const [leads, slots] = await Promise.all([store.listLeads(), slotsWithBookings(store, now)]);
   const allVisits = await store.listVisits();

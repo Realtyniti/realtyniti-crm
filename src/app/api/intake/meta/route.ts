@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { getAuthStore } from "@/lib/auth/session";
+import { notifyNewLead } from "@/lib/push";
 import { greetNewLead } from "@/lib/catcher";
 import { catcherConfig } from "@/lib/catcher-config";
 import { captureLead } from "@/lib/leads";
@@ -40,6 +42,7 @@ export async function POST(req: Request) {
         const form = await formName(lead.form_id ?? change.form_id, token, appSecret);
         if (form) await store.addEvent({ lead_id: result.lead.id, kind: "note", channel: "meta", body: `Lead form: ${form}` });
         await greetNewLead(store, catcherConfig(), result.lead);
+        after(() => notifyNewLead(getAuthStore(), result.lead));
       }
       results.push({ leadgen_id: change.leadgen_id, ok: true });
     } catch (e) {

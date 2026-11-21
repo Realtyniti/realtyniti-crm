@@ -29,6 +29,8 @@ export interface LeadQuery {
   source?: LeadSource | null;
   status?: LeadStatus | null;
   budget?: "known" | "unknown" | null;
+  /** A member id, or "none" for unassigned leads. */
+  assignee?: string | null;
   sort?: "followup" | "recent";
   page?: number;
   pageSize?: number;
@@ -84,6 +86,8 @@ export function matchesQuery(l: Lead, query: LeadQuery, now = new Date()): boole
   if (!matchesView(l, query.view, now)) return false;
   if (query.source && l.first_source !== query.source) return false;
   if (query.status && l.status !== query.status) return false;
+  if (query.assignee === "none" && l.assigned_to) return false;
+  if (query.assignee && query.assignee !== "none" && l.assigned_to !== query.assignee) return false;
   const hasBudget = l.budget_min_inr != null || l.budget_max_inr != null;
   if (query.budget === "known" && !hasBudget) return false;
   if (query.budget === "unknown" && hasBudget) return false;

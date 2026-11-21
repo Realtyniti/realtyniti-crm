@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiDenied } from "@/lib/auth/api";
 import { metaPageFor, pageAccessToken, pageLeads, metaLeadToInput } from "@/lib/intake/meta";
 import { captureLead, updateRequirement } from "@/lib/leads";
 import type { Requirement } from "@/lib/types";
@@ -12,6 +13,9 @@ export const maxDuration = 60;
  * again: each Meta lead id is stored once.
  */
 export async function POST() {
+  // Meta settings are the owner's alone.
+  const denied = await apiDenied("settings");
+  if (denied) return denied;
   const env = process.env;
   const appSecret = env.META_APP_SECRET ?? null;
   const pageIds = (env.META_PAGE_BRANDS ?? "").split(",").map((p) => p.split("=")[0].trim()).filter(Boolean);

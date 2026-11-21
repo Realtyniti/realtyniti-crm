@@ -5,10 +5,14 @@ import { FreshnessDot } from "@/components/freshness";
 import { normalisePhone } from "@/lib/phone";
 import { clientSummary, developerConfirmation } from "@/lib/projects";
 import { getStore } from "@/lib/store";
+import { requireMember } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { ProjectForm } from "../form";
 import { FreshnessCheck } from "./freshness-check";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const me = await requireMember();
+  const editor = can(me.role, "projects.edit");
   const { id } = await params;
   const p = await getStore().getProject(id);
   if (!p) notFound();
@@ -29,32 +33,44 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <ProjectForm project={p} />
+          {editor ? (
+            <ProjectForm project={p} />
+          ) : (
+            <section className="panel space-y-2 text-sm">
+              <h2 className="font-medium">Project details</h2>
+              <pre className="whitespace-pre-wrap rounded bg-subtle p-3 font-sans text-[13px]">{summary}</pre>
+              <p className="text-xs text-muted">Only the owner or a manager can change these figures.</p>
+            </section>
+          )}
         </div>
         <aside className="space-y-4">
-          <section className="panel space-y-2 text-sm">
-            <h2 className="font-medium">Ask the developer to re-confirm</h2>
-            <pre className="whitespace-pre-wrap rounded bg-subtle p-2 font-sans text-xs">{confirm}</pre>
-            <div className="flex gap-2">
-              <CopyButton text={confirm} label="Copy" />
-              {devPhone && (
-                <a
-                  className="btn-ghost text-xs"
-                  href={`https://wa.me/${devPhone.replace("+", "")}?text=${encodeURIComponent(confirm)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open in WhatsApp
-                </a>
-              )}
-            </div>
-            <p className="text-xs text-muted">When they reply, enter their figures under “Developer replied?”.</p>
-          </section>
-          <section className="panel space-y-2 text-sm">
-            <h2 className="font-medium">Developer replied?</h2>
-            <p className="text-xs text-muted">Enter their figures. You&apos;ll see old and new side by side and accept each change.</p>
-            <FreshnessCheck p={p} />
-          </section>
+          {editor && (
+            <>
+              <section className="panel space-y-2 text-sm">
+                <h2 className="font-medium">Ask the developer to re-confirm</h2>
+                <pre className="whitespace-pre-wrap rounded bg-subtle p-2 font-sans text-xs">{confirm}</pre>
+                <div className="flex gap-2">
+                  <CopyButton text={confirm} label="Copy" />
+                  {devPhone && (
+                    <a
+                      className="btn-ghost text-xs"
+                      href={`https://wa.me/${devPhone.replace("+", "")}?text=${encodeURIComponent(confirm)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open in WhatsApp
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-muted">When they reply, enter their figures under “Developer replied?”.</p>
+              </section>
+              <section className="panel space-y-2 text-sm">
+                <h2 className="font-medium">Developer replied?</h2>
+                <p className="text-xs text-muted">Enter their figures. You&apos;ll see old and new side by side and accept each change.</p>
+                <FreshnessCheck p={p} />
+              </section>
+            </>
+          )}
           <section className="panel space-y-2 text-sm">
             <h2 className="font-medium">Client summary (draft)</h2>
             <pre className="whitespace-pre-wrap rounded bg-subtle p-2 font-sans text-xs">{summary}</pre>
