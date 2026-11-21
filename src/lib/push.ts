@@ -1,3 +1,4 @@
+import { createECDH, hkdfSync } from "node:crypto";
 import webpush from "web-push";
 import type { AuthStore } from "./auth/store";
 import { can } from "./auth/roles";
@@ -7,7 +8,9 @@ import type { Lead } from "./types";
 
 /*
  * New-lead alerts on phones and computers (Web Push). Each device opts in from "My account".
- * Needs VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY; without them nothing is sent and nothing fails.
+ * The VAPID key pair comes from VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY when both are set. Otherwise it is
+ * derived on the server from SUPABASE_SERVICE_ROLE_KEY (HKDF, one-way), so no private key ever has to be
+ * generated or pasted anywhere. With neither, nothing is sent and nothing fails.
  * Alerts never carry the buyer's phone number, since they show on a locked screen.
  */
 
@@ -18,15 +21,41 @@ export interface PushPayload {
   tag?: string;
 }
 
+// Order of the P-256 group: a private key must be in [1, n-1].
+const P256_N = BigInt("0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551");
+
+/** A stable P-256 key pair derived from a server secret. Same secret, same keys, on every server instance. */
+export function deriveVapidKeys(secret: string): { publicKey: string; privateKey: string } {
+  for (let i = 0; ; i++) {
+    const d = Buffer.from(hkdfSync("sha256", secret, "realtyniti-crm", `web-push-vapid-v1:${i}`, 32));
+    const n = BigInt("0x" + d.toString("hex"));
+    if (n === BigInt(0) || n >= P256_N) continue;
+    const ecdh = createECDH("prime256v1");
+    ecdh.setPrivateKey(d);
+    return { publicKey: ecdh.getPublicKey().toString("base64url"), privateKey: d.toString("base64url") };
+  }
+}
+
+let derived: { secret: string; keys: { publicKey: string; privateKey: string } } | null = null;
+
+function vapidKeys(): { publicKey: string; privateKey: string } | null {
+  const pub = process.env.VAPID_PUBLIC_KEY;
+  const priv = process.env.VAPID_PRIVATE_KEY;
+  if (pub && priv) return { publicKey: pub, privateKey: priv };
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) return null;
+  if (derived?.secret !== secret) derived = { secret, keys: deriveVapidKeys(secret) };
+  return derived.keys;
+}
+
 export function vapidPublicKey(): string | null {
-  return process.env.VAPID_PUBLIC_KEY || null;
+  return vapidKeys()?.publicKey ?? null;
 }
 
 function configured(): boolean {
-  const pub = process.env.VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
-  if (!pub || !priv) return false;
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "https://tathyahomes.com", pub, priv);
+  const keys = vapidKeys();
+  if (!keys) return false;
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "https://tathyahomes.com", keys.publicKey, keys.privateKey);
   return true;
 }
 
@@ -49,7 +78,8 @@ export async function sendToMembers(auth: AuthStore, memberIds: string[], payloa
       } catch (e) {
         const status = (e as { statusCode?: number }).statusCode;
         // 404/410: the browser dropped this subscription (app removed, permission withdrawn).
-        if (status === 404 || status === 410) await auth.deletePush(s.endpoint).catch(() => {});
+        // 403: it was made with different keys (the server secret changed); the device must turn alerts on again.
+        if (status === 404 || status === 410 || status === 403) await auth.deletePush(s.endpoint).catch(() => {});
         else console.error("push failed", status ?? e);
       }
     }),

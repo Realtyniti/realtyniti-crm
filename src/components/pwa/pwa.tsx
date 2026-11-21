@@ -127,9 +127,9 @@ export function AlertsCard({ vapidKey, disabled }: { vapidKey: string | null; di
       if (Notification.permission === "denied") return setState("blocked");
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
-      setState(sub ? "on" : "off");
+      setState(sub && (!vapidKey || sameKey(sub.options.applicationServerKey, urlBase64ToUint8Array(vapidKey))) ? "on" : "off");
     })().catch(() => setState("unsupported"));
-  }, [ready, ios, standalone]);
+  }, [ready, ios, standalone, vapidKey]);
 
   async function turnOn() {
     if (!vapidKey) return;
@@ -142,9 +142,14 @@ export function AlertsCard({ vapidKey, disabled }: { vapidKey: string | null; di
         return;
       }
       const reg = await navigator.serviceWorker.ready;
-      const sub =
-        (await reg.pushManager.getSubscription()) ??
-        (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) }));
+      const want = urlBase64ToUint8Array(vapidKey);
+      let sub = await reg.pushManager.getSubscription();
+      // A subscription made with older keys can't receive alerts any more: replace it.
+      if (sub && !sameKey(sub.options.applicationServerKey, want)) {
+        await sub.unsubscribe();
+        sub = null;
+      }
+      sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
       const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
       const r = await savePushAction(json);
       setMsg(r);
@@ -224,4 +229,10 @@ export function AlertsCard({ vapidKey, disabled }: { vapidKey: string | null; di
       {msg.ok && state === "on" && msg.ok.startsWith("Test") && <p className="text-[13px] text-good">{msg.ok}</p>}
     </div>
   );
+}
+
+function sameKey(a: ArrayBuffer | null, b: Uint8Array): boolean {
+  if (!a) return false;
+  const x = new Uint8Array(a);
+  return x.length === b.length && x.every((v, i) => v === b[i]);
 }
