@@ -84,7 +84,7 @@ Replace them with his own wording; everything else reads from that file.
   tries pause a login for 15 minutes. Every page, server action and admin API route checks the session in the database.
 - PWA: `src/app/manifest.ts`, `public/sw.js` (alerts and an offline page; lead screens are never cached), icons in
   `public/icons`. `/account` shows install steps (Android button, iPhone Share > Add to Home Screen) and turns new-lead
-  alerts on per device. Owner and managers get every new lead; agents get leads assigned to them. Needs `VAPID_*` keys.
+  alerts on per device. Owner and managers get every new lead; agents get leads assigned to them. The push keys are derived from the server secret unless `VAPID_*` keys are set.
 
 ## Run locally
 
